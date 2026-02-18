@@ -1,4 +1,5 @@
-from typing import Optional
+with open('engine/thermo/antoine.py', 'w') as f:
+    f.write("""from typing import Optional
 
 ANTOINE_COEFFICIENTS = {
     "water":      (8.07131, 1730.630, 233.426,   1.0,  100.0),
@@ -32,3 +33,5 @@ def antoine_temperature(P_pa: float, A: float, B: float, C: float) -> float:
     import math
     P_mmhg = P_pa / 133.322
     return B / (A - math.log10(P_mmhg)) - C
+""")
+print('Done')
