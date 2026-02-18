@@ -1,8 +1,8 @@
 # SIMCO — Current Sprint
 
 ## Phase 1: Foundation ✅
-- [x] Antoine equation with built-in coefficients
-- [x] NRTL activity coefficient model
+- [x] Antoine equation with built-in coefficients (18 compounds)
+- [x] NRTL activity coefficient model (8 binary pairs)
 - [x] Ideal gas law utilities
 - [x] Henry's law with temperature correction
 - [x] SQLite chemical database schema
@@ -13,22 +13,29 @@
 - [x] GitHub repo created (SIMCO)
 - [x] Initial commit with full project structure
 
-## Phase 2: Desktop Shell (Next)
-- [ ] Initialize Electron + React project in `ui/`
-- [ ] Set up IPC bridge (Electron main → Python child process)
-- [ ] Build VLE calculator page
-  - [ ] Compound selection dropdowns (from database)
-  - [ ] Pressure/temperature input
-  - [ ] Txy diagram with interactive chart (Recharts or Plotly)
-  - [ ] Results table
-- [ ] Build chemical database browser page
-  - [ ] Compound search/filter
-  - [ ] Property detail cards
-  - [ ] Packing data table
-- [ ] Basic navigation (sidebar or tabs)
-- [ ] App window configuration (title, icon, min size)
+## Phase 2: Desktop Shell (In Progress)
+- [x] Initialize Electron + React project in `desktop/`
+- [x] Vite + Tailwind + TypeScript config
+- [x] Custom titlebar with engine status indicator
+- [x] Sidebar navigation (Calculations / bottom nav)
+- [x] App window configuration (title, frame, min size)
+- [x] IPC bridge (preload, main process, engine spawn/health)
+- [x] `useEngine` hook — HTTP calls to FastAPI backend
+- [x] VLE Calculator page — pure-component bubble/dew point working
+- [x] Placeholder pages for upcoming modules
+- [x] **Wire binary Txy/Pxy diagram endpoint into server.py** ✅
+- [ ] Connect VLE page chart to real engine data (replace mocked curve)
+- [ ] Add binary mixture selection (two-component dropdowns) to VLE page
+- [ ] Build chemical database browser page (compound search, property cards, packing table)
+- [ ] Update README project structure (ui/ → desktop/)
 
-## Backlog
-- [ ] Packed column design module
+## Backlog (Phase 3+)
+- [ ] Packed column design module (HTU/NTU, HETP, flooding)
+- [ ] Tray column design (McCabe-Thiele, Kremser)
 - [ ] .smc file save/load
-- [ ] Dark mode / theme system
+- [ ] Multi-component systems
+- [ ] Report generation (PDF export)
+- [ ] Amine scrubbing module (MEA, DEA, MDEA)
+- [ ] Sensitivity analysis tools
+- [ ] Unit conversion system
+- [ ] User-defined compounds/packings

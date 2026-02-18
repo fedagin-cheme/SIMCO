@@ -9,3 +9,5 @@
 3. **Use SI units internally, convert at boundaries** — engine uses Pa, K, mol, m³ internally. All unit conversions happen at the API/UI boundary.
 
 4. **Database is regenerated from seed** — the .db file is gitignored. The seed script is the source of truth for baseline data.
+
+5. **Export what tests import** — test suite imported `MMHG_TO_PA` from antoine.py but it was only used as a magic number (133.322). Always define constants as named exports when other modules reference them.

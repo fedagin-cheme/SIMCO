@@ -1,0 +1,236 @@
+diff --git a/engine/api/server.py b/engine/api/server.py
+index e40776c..2e9bd60 100644
+--- a/engine/api/server.py
++++ b/engine/api/server.py
+@@ -1,7 +1,16 @@
+ from fastapi import FastAPI, HTTPException
+ from fastapi.middleware.cors import CORSMiddleware
+ from pydantic import BaseModel
+-from typing import Optional
++from typing import Optional, List
++
++from engine.thermo.antoine import (
++    antoine_pressure,
++    antoine_temperature,
++    get_antoine_coefficients,
++    ANTOINE_COEFFICIENTS,
++)
++from engine.thermo.nrtl import get_nrtl_params, NRTL_BINARY_PARAMS
++from engine.api.routes.vle import bubble_point_temperature, generate_txy_diagram
+ 
+ app = FastAPI(title="SIMCO Engine", version="0.1.0")
+ 
+@@ -12,22 +21,62 @@ app.add_middleware(
+     allow_headers=["*"],
+ )
+ 
++
++# ─── Health ─────────────────────────────────────────────────────────────────────
++
+ @app.get("/health")
+ def health():
+     return {"status": "ok", "engine": "SIMCO v0.1.0"}
+ 
++
++# ─── Component Metadata ─────────────────────────────────────────────────────────
++
++@app.get("/api/compounds")
++def list_compounds():
++    """List all compounds with Antoine coefficients available."""
++    compounds = []
++    for key, (A, B, C, T_min, T_max) in ANTOINE_COEFFICIENTS.items():
++        if key == "water_high":
++            continue  # skip alt-range entry
++        compounds.append({
++            "id": key,
++            "T_min_c": T_min,
++            "T_max_c": T_max,
++        })
++    return {"compounds": compounds}
++
++
++@app.get("/api/vle/binary/pairs")
++def list_binary_pairs():
++    """List all binary pairs with NRTL parameters available for Txy diagrams."""
++    pairs = []
++    for (comp1, comp2), (dg12, dg21, alpha) in NRTL_BINARY_PARAMS.items():
++        pairs.append({
++            "comp1": comp1,
++            "comp2": comp2,
++            "alpha12": alpha,
++        })
++    return {"pairs": pairs}
++
++
++# ─── Pure-Component VLE ──────────────────────────────────────────────────────────
++
+ class BubbleDewRequest(BaseModel):
+     component: str
+     temperature_c: float
+     pressure_bar: float
+ 
++
+ @app.post("/api/vle/bubble-dew")
+ def bubble_dew(req: BubbleDewRequest):
++    """Pure-component saturation calculation (Antoine forward/inverse)."""
+     try:
+-        from engine.thermo.antoine import antoine_pressure, antoine_temperature, get_antoine_coefficients
+         coeffs = get_antoine_coefficients(req.component)
+         if not coeffs:
+-            raise HTTPException(status_code=404, detail=f"Component '{req.component}' not found in database")
++            raise HTTPException(
++                status_code=404,
++                detail=f"Component '{req.component}' not found in database",
++            )
+         A, B, C, T_min, T_max = coeffs
+         P_pa = req.pressure_bar * 1e5
+         bubble_T = antoine_temperature(P_pa, A, B, C)
+@@ -45,3 +94,51 @@ def bubble_dew(req: BubbleDewRequest):
+         raise
+     except Exception as e:
+         raise HTTPException(status_code=500, detail=str(e))
++
++
++# ─── Binary Mixture VLE ─────────────────────────────────────────────────────────
++
++class BinaryBubblePointRequest(BaseModel):
++    comp1: str
++    comp2: str
++    x1: float
++    pressure_bar: float
++
++
++@app.post("/api/vle/binary/bubble-point")
++def binary_bubble_point(req: BinaryBubblePointRequest):
++    """Binary mixture bubble point at given x1 and pressure (modified Raoult's law + NRTL)."""
++    try:
++        P_pa = req.pressure_bar * 1e5
++        result = bubble_point_temperature(req.x1, P_pa, req.comp1, req.comp2)
++        result["comp1"] = req.comp1
++        result["comp2"] = req.comp2
++        result["x1"] = req.x1
++        result["pressure_bar"] = req.pressure_bar
++        return result
++    except ValueError as e:
++        raise HTTPException(status_code=404, detail=str(e))
++    except Exception as e:
++        raise HTTPException(status_code=500, detail=str(e))
++
++
++class TxyDiagramRequest(BaseModel):
++    comp1: str
++    comp2: str
++    pressure_bar: float
++    n_points: int = 51
++
++
++@app.post("/api/vle/binary/txy")
++def txy_diagram(req: TxyDiagramRequest):
++    """Generate full Txy diagram data for a binary mixture at constant pressure."""
++    try:
++        P_pa = req.pressure_bar * 1e5
++        data = generate_txy_diagram(P_pa, req.comp1, req.comp2, req.n_points)
++        # Convert to pressure_bar for consistency
++        data["pressure_bar"] = req.pressure_bar
++        return data
++    except ValueError as e:
++        raise HTTPException(status_code=404, detail=str(e))
++    except Exception as e:
++        raise HTTPException(status_code=500, detail=str(e))
+diff --git a/engine/thermo/antoine.py b/engine/thermo/antoine.py
+index 36dc46d..4c2eb72 100644
+--- a/engine/thermo/antoine.py
++++ b/engine/thermo/antoine.py
+@@ -1,5 +1,8 @@
+ from typing import Optional
+ 
++# mmHg → Pa conversion factor
++MMHG_TO_PA = 133.322
++
+ ANTOINE_COEFFICIENTS = {
+     "water":      (8.07131, 1730.630, 233.426,   1.0,  100.0),
+     "water_high": (8.14019, 1810.940, 244.485,  60.0,  150.0),
+@@ -26,9 +29,9 @@ def get_antoine_coefficients(compound: str) -> Optional[tuple]:
+     return ANTOINE_COEFFICIENTS.get(key)
+ 
+ def antoine_pressure(T_celsius: float, A: float, B: float, C: float) -> float:
+-    return 133.322 * (10 ** (A - B / (C + T_celsius)))
++    return MMHG_TO_PA * (10 ** (A - B / (C + T_celsius)))
+ 
+ def antoine_temperature(P_pa: float, A: float, B: float, C: float) -> float:
+     import math
+-    P_mmhg = P_pa / 133.322
++    P_mmhg = P_pa / MMHG_TO_PA
+     return B / (A - math.log10(P_mmhg)) - C
+diff --git a/tasks/lessons.md b/tasks/lessons.md
+index 9d89740..311262d 100644
+--- a/tasks/lessons.md
++++ b/tasks/lessons.md
+@@ -9,3 +9,5 @@
+ 3. **Use SI units internally, convert at boundaries** — engine uses Pa, K, mol, m³ internally. All unit conversions happen at the API/UI boundary.
+ 
+ 4. **Database is regenerated from seed** — the .db file is gitignored. The seed script is the source of truth for baseline data.
++
++5. **Export what tests import** — test suite imported `MMHG_TO_PA` from antoine.py but it was only used as a magic number (133.322). Always define constants as named exports when other modules reference them.
+diff --git a/tasks/todo.md b/tasks/todo.md
+index 54edba7..1836c6e 100644
+--- a/tasks/todo.md
++++ b/tasks/todo.md
+@@ -1,8 +1,8 @@
+ # SIMCO — Current Sprint
+ 
+ ## Phase 1: Foundation ✅
+-- [x] Antoine equation with built-in coefficients
+-- [x] NRTL activity coefficient model
++- [x] Antoine equation with built-in coefficients (18 compounds)
++- [x] NRTL activity coefficient model (8 binary pairs)
+ - [x] Ideal gas law utilities
+ - [x] Henry's law with temperature correction
+ - [x] SQLite chemical database schema
+@@ -13,22 +13,29 @@
+ - [x] GitHub repo created (SIMCO)
+ - [x] Initial commit with full project structure
+ 
+-## Phase 2: Desktop Shell (Next)
+-- [ ] Initialize Electron + React project in `ui/`
+-- [ ] Set up IPC bridge (Electron main → Python child process)
+-- [ ] Build VLE calculator page
+-  - [ ] Compound selection dropdowns (from database)
+-  - [ ] Pressure/temperature input
+-  - [ ] Txy diagram with interactive chart (Recharts or Plotly)
+-  - [ ] Results table
+-- [ ] Build chemical database browser page
+-  - [ ] Compound search/filter
+-  - [ ] Property detail cards
+-  - [ ] Packing data table
+-- [ ] Basic navigation (sidebar or tabs)
+-- [ ] App window configuration (title, icon, min size)
++## Phase 2: Desktop Shell (In Progress)
++- [x] Initialize Electron + React project in `desktop/`
++- [x] Vite + Tailwind + TypeScript config
++- [x] Custom titlebar with engine status indicator
++- [x] Sidebar navigation (Calculations / bottom nav)
++- [x] App window configuration (title, frame, min size)
++- [x] IPC bridge (preload, main process, engine spawn/health)
++- [x] `useEngine` hook — HTTP calls to FastAPI backend
++- [x] VLE Calculator page — pure-component bubble/dew point working
++- [x] Placeholder pages for upcoming modules
++- [x] **Wire binary Txy/Pxy diagram endpoint into server.py** ✅
++- [ ] Connect VLE page chart to real engine data (replace mocked curve)
++- [ ] Add binary mixture selection (two-component dropdowns) to VLE page
++- [ ] Build chemical database browser page (compound search, property cards, packing table)
++- [ ] Update README project structure (ui/ → desktop/)
+ 
+-## Backlog
+-- [ ] Packed column design module
++## Backlog (Phase 3+)
++- [ ] Packed column design module (HTU/NTU, HETP, flooding)
++- [ ] Tray column design (McCabe-Thiele, Kremser)
+ - [ ] .smc file save/load
+-- [ ] Dark mode / theme system
++- [ ] Multi-component systems
++- [ ] Report generation (PDF export)
++- [ ] Amine scrubbing module (MEA, DEA, MDEA)
++- [ ] Sensitivity analysis tools
++- [ ] Unit conversion system
++- [ ] User-defined compounds/packings
