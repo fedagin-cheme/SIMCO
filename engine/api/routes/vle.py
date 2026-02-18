@@ -85,6 +85,82 @@ def bubble_point_temperature(
     return {"T_celsius": round(T, 4), "converged": False}
 
 
+def bubble_point_pressure(
+    x1: float,
+    T_celsius: float,
+    comp1: str,
+    comp2: str,
+) -> Dict[str, Any]:
+    """
+    Calculate bubble point pressure for a binary mixture at given temperature.
+
+    Uses modified Raoult's law: P = x₁γ₁P₁ˢᵃᵗ + x₂γ₂P₂ˢᵃᵗ
+
+    At constant T this is direct (no iteration needed).
+    Returns dict with P_pa, P_bar, y1, gamma1, gamma2.
+    """
+    antoine1 = get_antoine_coefficients(comp1)
+    antoine2 = get_antoine_coefficients(comp2)
+    nrtl = get_nrtl_params(comp1, comp2)
+
+    if not antoine1 or not antoine2:
+        raise ValueError(f"Antoine coefficients not found for {comp1} and/or {comp2}")
+
+    A1, B1, C1, _, _ = antoine1
+    A2, B2, C2, _, _ = antoine2
+
+    dg12, dg21, alpha12 = nrtl if nrtl else (0.0, 0.0, 0.3)
+
+    x2 = 1.0 - x1
+    T_K = T_celsius + 273.15
+
+    gamma1, gamma2 = nrtl_gamma(x1, T_K, dg12, dg21, alpha12)
+
+    P1sat = antoine_pressure(T_celsius, A1, B1, C1)
+    P2sat = antoine_pressure(T_celsius, A2, B2, C2)
+
+    P_bubble = x1 * gamma1 * P1sat + x2 * gamma2 * P2sat
+    y1 = x1 * gamma1 * P1sat / P_bubble if P_bubble > 0 else 0.0
+
+    return {
+        "P_pa": round(P_bubble, 2),
+        "P_bar": round(P_bubble / 1e5, 6),
+        "y1": round(y1, 6),
+        "gamma1": round(gamma1, 6),
+        "gamma2": round(gamma2, 6),
+    }
+
+
+def generate_pxy_diagram(
+    T_celsius: float,
+    comp1: str,
+    comp2: str,
+    n_points: int = 51,
+) -> Dict[str, Any]:
+    """
+    Generate Pxy diagram data for a binary mixture at constant temperature.
+
+    Returns dict with x1, y1, P_bar arrays.
+    """
+    x1_values = np.linspace(0.0, 1.0, n_points)
+    P_values = []
+    y1_values = []
+
+    for x1 in x1_values:
+        result = bubble_point_pressure(float(x1), T_celsius, comp1, comp2)
+        P_values.append(result["P_bar"])
+        y1_values.append(result["y1"])
+
+    return {
+        "x1": x1_values.tolist(),
+        "y1": y1_values,
+        "P_bar": P_values,
+        "T_celsius": T_celsius,
+        "comp1": comp1,
+        "comp2": comp2,
+    }
+
+
 def generate_txy_diagram(
     P_pa: float,
     comp1: str,

@@ -40,7 +40,17 @@ interface TxyResult {
   T_celsius: number[]
 }
 
+interface PxyResult {
+  comp1: string
+  comp2: string
+  T_celsius: number
+  x1: number[]
+  y1: number[]
+  P_bar: number[]
+}
+
 type Mode = 'pure' | 'binary'
+type BinarySpec = 'pressure' | 'temperature'
 
 // ─── Compound Data ──────────────────────────────────────────────────────────────
 
@@ -220,12 +230,8 @@ function PureComponentView() {
             <p className="label">Results</p>
             <ResultRow label="Component" value={result.component} />
             <ResultRow
-              label="Bubble Point"
+              label="Boiling Point"
               value={`${result.bubble_temperature_c.toFixed(2)} °C`}
-            />
-            <ResultRow
-              label="Dew Point"
-              value={`${result.dew_temperature_c.toFixed(2)} °C`}
             />
             <ResultRow
               label="Sat. Pressure"
@@ -289,70 +295,64 @@ function PureComponentView() {
 
 function BinaryMixtureView() {
   const [pairIndex, setPairIndex] = useState(0)
+  const [spec, setSpec] = useState<BinarySpec>('pressure')
   const [pressure, setPressure] = useState('1.01325')
+  const [temperature, setTemperature] = useState('80')
   const [txyData, setTxyData] = useState<TxyResult | null>(null)
+  const [pxyData, setPxyData] = useState<PxyResult | null>(null)
 
-  const { loading, error, call } = useEngine<TxyResult>()
+  const { loading, error, call } = useEngine<TxyResult | PxyResult>()
 
   const pair = BINARY_PAIRS[pairIndex]
 
   async function handleGenerate() {
-    const data = await call('/api/vle/binary/txy', {
-      comp1: pair.comp1,
-      comp2: pair.comp2,
-      pressure_bar: parseFloat(pressure),
-      n_points: 51,
-    })
-    if (data) setTxyData(data)
+    if (spec === 'pressure') {
+      const data = await call('/api/vle/binary/txy', {
+        comp1: pair.comp1,
+        comp2: pair.comp2,
+        pressure_bar: parseFloat(pressure),
+        n_points: 51,
+      })
+      if (data) {
+        setTxyData(data as TxyResult)
+        setPxyData(null)
+      }
+    } else {
+      const data = await call('/api/vle/binary/pxy', {
+        comp1: pair.comp1,
+        comp2: pair.comp2,
+        temperature_c: parseFloat(temperature),
+        n_points: 51,
+      })
+      if (data) {
+        setPxyData(data as PxyResult)
+        setTxyData(null)
+      }
+    }
   }
 
-  // Transform API arrays into recharts-friendly data
-  const chartData =
-    txyData
-      ? txyData.x1.map((x, i) => ({
-          x: parseFloat(x.toFixed(4)),
-          'Bubble (T-x)': parseFloat(txyData.T_celsius[i].toFixed(2)),
-          'Dew (T-y)': parseFloat(
-            // Dew line: plot T vs y1 — we need to find T at each y value.
-            // Since we have y1 array, we plot the same T values against y1 for the dew curve.
-            // For a proper Txy, bubble = T vs x1, dew = T vs y1. We store both for the chart.
-            txyData.T_celsius[i].toFixed(2)
-          ),
-          y: parseFloat(txyData.y1[i].toFixed(4)),
-        }))
-      : []
+  // Active diagram data
+  const isTxy = spec === 'pressure' && txyData != null
+  const isPxy = spec === 'temperature' && pxyData != null
+  const activeData = isTxy ? txyData : isPxy ? pxyData : null
 
-  // For the Txy diagram we need two datasets:
-  // Bubble curve: T vs x1 (liquid composition)
-  // Dew curve: T vs y1 (vapor composition)
-  const bubbleCurve = txyData
-    ? txyData.x1.map((x, i) => ({
-        composition: parseFloat(x.toFixed(4)),
-        T: parseFloat(txyData.T_celsius[i].toFixed(2)),
-      }))
-    : []
-
-  const dewCurve = txyData
-    ? txyData.y1.map((y, i) => ({
-        composition: parseFloat((y as number).toFixed(4)),
-        T: parseFloat(txyData.T_celsius[i].toFixed(2)),
-      }))
-    : []
-
-  // Merge into a single dataset keyed by composition for recharts
+  // ── Txy chart data ──
   const txyChartData = (() => {
     if (!txyData) return []
-
-    // Collect all unique composition values, sorted
+    const bubbleCurve = txyData.x1.map((x, i) => ({
+      composition: parseFloat(x.toFixed(4)),
+      T: parseFloat(txyData.T_celsius[i].toFixed(2)),
+    }))
+    const dewCurve = txyData.y1.map((y, i) => ({
+      composition: parseFloat((y as number).toFixed(4)),
+      T: parseFloat(txyData.T_celsius[i].toFixed(2)),
+    }))
     const compositionSet = new Set<number>()
     bubbleCurve.forEach((p) => compositionSet.add(p.composition))
     dewCurve.forEach((p) => compositionSet.add(p.composition))
     const allComps = Array.from(compositionSet).sort((a, b) => a - b)
-
-    // Build lookup maps
     const bubbleMap = new Map(bubbleCurve.map((p) => [p.composition, p.T]))
     const dewMap = new Map(dewCurve.map((p) => [p.composition, p.T]))
-
     return allComps.map((z) => ({
       z,
       Bubble: bubbleMap.get(z) ?? null,
@@ -360,14 +360,41 @@ function BinaryMixtureView() {
     }))
   })()
 
-  // xy diagram data
-  const xyChartData = txyData
-    ? txyData.x1.map((x, i) => ({
-        x: parseFloat(x.toFixed(4)),
-        y: parseFloat(txyData.y1[i].toFixed(4)),
-        diagonal: parseFloat(x.toFixed(4)),
-      }))
-    : []
+  // ── Pxy chart data ──
+  const pxyChartData = (() => {
+    if (!pxyData) return []
+    const bubbleCurve = pxyData.x1.map((x, i) => ({
+      composition: parseFloat(x.toFixed(4)),
+      P: parseFloat(pxyData.P_bar[i].toFixed(5)),
+    }))
+    const dewCurve = pxyData.y1.map((y, i) => ({
+      composition: parseFloat((y as number).toFixed(4)),
+      P: parseFloat(pxyData.P_bar[i].toFixed(5)),
+    }))
+    const compositionSet = new Set<number>()
+    bubbleCurve.forEach((p) => compositionSet.add(p.composition))
+    dewCurve.forEach((p) => compositionSet.add(p.composition))
+    const allComps = Array.from(compositionSet).sort((a, b) => a - b)
+    const bubbleMap = new Map(bubbleCurve.map((p) => [p.composition, p.P]))
+    const dewMap = new Map(dewCurve.map((p) => [p.composition, p.P]))
+    return allComps.map((z) => ({
+      z,
+      Bubble: bubbleMap.get(z) ?? null,
+      Dew: dewMap.get(z) ?? null,
+    }))
+  })()
+
+  // ── xy chart data (works for both modes) ──
+  const xyChartData = (() => {
+    if (!activeData) return []
+    return activeData.x1.map((x, i) => ({
+      x: parseFloat(x.toFixed(4)),
+      y: parseFloat(activeData.y1[i].toFixed(4)),
+      diagonal: parseFloat(x.toFixed(4)),
+    }))
+  })()
+
+  const comp1Label = activeData?.comp1 ?? pair.comp1
 
   return (
     <div className="flex gap-4 flex-1 min-h-0">
@@ -390,18 +417,60 @@ function BinaryMixtureView() {
             </select>
           </Field>
 
-          <Field label="System Pressure">
-            <div className="flex gap-2">
-              <input
-                type="number"
-                value={pressure}
-                onChange={(e) => setPressure(e.target.value)}
-                className="input-field flex-1"
-                step="0.1"
-              />
-              <Unit>bar</Unit>
+          {/* Spec Toggle */}
+          <Field label="Specify">
+            <div className="flex bg-surface-700 border border-surface-500 rounded-md p-0.5">
+              <button
+                onClick={() => setSpec('pressure')}
+                className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  spec === 'pressure'
+                    ? 'bg-primary-600/20 text-primary-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Pressure (Txy)
+              </button>
+              <button
+                onClick={() => setSpec('temperature')}
+                className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  spec === 'temperature'
+                    ? 'bg-primary-600/20 text-primary-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Temperature (Pxy)
+              </button>
             </div>
           </Field>
+
+          {/* Conditional Input */}
+          {spec === 'pressure' ? (
+            <Field label="System Pressure">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={pressure}
+                  onChange={(e) => setPressure(e.target.value)}
+                  className="input-field flex-1"
+                  step="0.1"
+                />
+                <Unit>bar</Unit>
+              </div>
+            </Field>
+          ) : (
+            <Field label="System Temperature">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={temperature}
+                  onChange={(e) => setTemperature(e.target.value)}
+                  className="input-field flex-1"
+                  step="1"
+                />
+                <Unit>°C</Unit>
+              </div>
+            </Field>
+          )}
 
           <button
             onClick={handleGenerate}
@@ -422,34 +491,56 @@ function BinaryMixtureView() {
           <ErrorMessage message={error} />
         </div>
 
-        {/* Key values */}
-        {txyData && (
+        {/* Summary */}
+        {activeData && (
           <div className="panel p-4 space-y-3">
             <p className="label">System Summary</p>
-            <ResultRow label="Component 1" value={txyData.comp1} />
-            <ResultRow label="Component 2" value={txyData.comp2} />
-            <ResultRow
-              label="Pressure"
-              value={`${txyData.pressure_bar} bar`}
-            />
-            <ResultRow
-              label="T at x₁=0 (pure 2)"
-              value={`${txyData.T_celsius[0].toFixed(2)} °C`}
-            />
-            <ResultRow
-              label="T at x₁=1 (pure 1)"
-              value={`${txyData.T_celsius[txyData.T_celsius.length - 1].toFixed(2)} °C`}
-            />
+            <ResultRow label="Component 1" value={activeData.comp1} />
+            <ResultRow label="Component 2" value={activeData.comp2} />
+            {isTxy && txyData && (
+              <>
+                <ResultRow
+                  label="Pressure"
+                  value={`${txyData.pressure_bar} bar`}
+                />
+                <ResultRow
+                  label="T at x₁=0 (pure 2)"
+                  value={`${txyData.T_celsius[0].toFixed(2)} °C`}
+                />
+                <ResultRow
+                  label="T at x₁=1 (pure 1)"
+                  value={`${txyData.T_celsius[txyData.T_celsius.length - 1].toFixed(2)} °C`}
+                />
+              </>
+            )}
+            {isPxy && pxyData && (
+              <>
+                <ResultRow
+                  label="Temperature"
+                  value={`${pxyData.T_celsius} °C`}
+                />
+                <ResultRow
+                  label="P at x₁=0 (pure 2)"
+                  value={`${pxyData.P_bar[0].toFixed(4)} bar`}
+                />
+                <ResultRow
+                  label="P at x₁=1 (pure 1)"
+                  value={`${pxyData.P_bar[pxyData.P_bar.length - 1].toFixed(4)} bar`}
+                />
+              </>
+            )}
           </div>
         )}
       </div>
 
       {/* Charts */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
-        {/* Txy Diagram */}
+        {/* Phase Diagram (Txy or Pxy) */}
         <div className="flex-1 panel p-4 flex flex-col min-h-0">
-          <p className="label mb-3">Txy Diagram</p>
-          {txyChartData.length > 0 ? (
+          <p className="label mb-3">
+            {isTxy ? 'Txy Diagram' : isPxy ? 'Pxy Diagram' : 'Phase Diagram'}
+          </p>
+          {isTxy && txyChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={txyChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
@@ -460,7 +551,7 @@ function BinaryMixtureView() {
                   stroke="#484f58"
                   tick={{ fill: '#94a3b8', fontSize: 11 }}
                   label={{
-                    value: `Mole fraction ${txyData?.comp1 ?? ''}`,
+                    value: `Mole fraction ${comp1Label}`,
                     position: 'insideBottom',
                     offset: -5,
                     fill: '#64748b',
@@ -472,6 +563,68 @@ function BinaryMixtureView() {
                   tick={{ fill: '#94a3b8', fontSize: 11 }}
                   label={{
                     value: 'Temperature (°C)',
+                    angle: -90,
+                    position: 'insideLeft',
+                    offset: 10,
+                    fill: '#64748b',
+                    fontSize: 11,
+                  }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1c2128',
+                    border: '1px solid #30363d',
+                    borderRadius: 6,
+                    fontSize: 12,
+                  }}
+                  labelFormatter={(v) => `z = ${v}`}
+                />
+                <Legend
+                  wrapperStyle={{ paddingTop: 8, fontSize: 12, color: '#94a3b8' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Bubble"
+                  stroke="#14b8a6"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Bubble (liquid)"
+                  connectNulls
+                />
+                <Line
+                  type="monotone"
+                  dataKey="Dew"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Dew (vapor)"
+                  connectNulls
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : isPxy && pxyChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={pxyChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+                <XAxis
+                  dataKey="z"
+                  type="number"
+                  domain={[0, 1]}
+                  stroke="#484f58"
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  label={{
+                    value: `Mole fraction ${comp1Label}`,
+                    position: 'insideBottom',
+                    offset: -5,
+                    fill: '#64748b',
+                    fontSize: 11,
+                  }}
+                />
+                <YAxis
+                  stroke="#484f58"
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  label={{
+                    value: 'Pressure (bar)',
                     angle: -90,
                     position: 'insideLeft',
                     offset: 10,
@@ -530,7 +683,7 @@ function BinaryMixtureView() {
                   stroke="#484f58"
                   tick={{ fill: '#94a3b8', fontSize: 11 }}
                   label={{
-                    value: `x₁ (${txyData?.comp1 ?? ''})`,
+                    value: `x₁ (${comp1Label})`,
                     position: 'insideBottom',
                     offset: -5,
                     fill: '#64748b',
@@ -542,7 +695,7 @@ function BinaryMixtureView() {
                   stroke="#484f58"
                   tick={{ fill: '#94a3b8', fontSize: 11 }}
                   label={{
-                    value: `y₁ (${txyData?.comp1 ?? ''})`,
+                    value: `y₁ (${comp1Label})`,
                     angle: -90,
                     position: 'insideLeft',
                     offset: 10,
@@ -582,7 +735,7 @@ function BinaryMixtureView() {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyState message="Generate a Txy diagram to see the xy curve" />
+            <EmptyState message="Generate a diagram to see the xy curve" />
           )}
         </div>
       </div>

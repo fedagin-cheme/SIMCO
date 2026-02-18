@@ -13,7 +13,7 @@ from engine.thermo.antoine import (
     CRITICAL_PROPERTIES,
 )
 from engine.thermo.nrtl import get_nrtl_params, NRTL_BINARY_PARAMS
-from engine.api.routes.vle import bubble_point_temperature, generate_txy_diagram
+from engine.api.routes.vle import bubble_point_temperature, bubble_point_pressure, generate_txy_diagram, generate_pxy_diagram
 
 app = FastAPI(title="SIMCO Engine", version="0.1.0")
 
@@ -164,6 +164,25 @@ def txy_diagram(req: TxyDiagramRequest):
         data = generate_txy_diagram(P_pa, req.comp1, req.comp2, req.n_points)
         # Convert to pressure_bar for consistency
         data["pressure_bar"] = req.pressure_bar
+        return data
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PxyDiagramRequest(BaseModel):
+    comp1: str
+    comp2: str
+    temperature_c: float
+    n_points: int = 51
+
+
+@app.post("/api/vle/binary/pxy")
+def pxy_diagram(req: PxyDiagramRequest):
+    """Generate full Pxy diagram data for a binary mixture at constant temperature."""
+    try:
+        data = generate_pxy_diagram(req.temperature_c, req.comp1, req.comp2, req.n_points)
         return data
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
