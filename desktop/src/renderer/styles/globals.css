@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base ──────────────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    box-sizing: border-box;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-surface-900 text-slate-100 font-sans text-sm;
+    user-select: none; /* prevent accidental text selection in app chrome */
+  }
+
+  /* Allow text selection in input fields and results */
+  input, textarea, .selectable {
+    user-select: text;
+  }
+}
+
+/* ─── Titlebar drag region ───────────────────────────────────────────────────── */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* ─── Scrollbars ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-surface-800;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-surface-500 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-surface-400;
+}
+
+/* ─── Component utilities ────────────────────────────────────────────────────── */
+@layer components {
+  .panel {
+    @apply bg-surface-800 border border-surface-600 rounded-lg;
+  }
+
+  .input-field {
+    @apply bg-surface-700 border border-surface-500 rounded-md px-3 py-2
+           text-slate-100 text-sm placeholder-slate-500
+           focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500
+           transition-colors;
+    user-select: text;
+  }
+
+  .btn-primary {
+    @apply bg-primary-600 hover:bg-primary-500 text-white font-medium
+           px-4 py-2 rounded-md transition-colors text-sm
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply text-slate-400 hover:text-slate-100 hover:bg-surface-600
+           px-3 py-2 rounded-md transition-colors text-sm;
+  }
+
+  .label {
+    @apply text-slate-400 text-xs font-medium uppercase tracking-wide;
+  }
+
+  .value-display {
+    @apply font-mono text-primary-400 text-sm;
+  }
+}
