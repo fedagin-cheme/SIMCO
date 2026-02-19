@@ -9,8 +9,10 @@ from engine.thermo.antoine import (
     get_antoine_coefficients,
     get_critical_properties,
     validate_conditions,
+    get_all_compound_details,
     ANTOINE_COEFFICIENTS,
     CRITICAL_PROPERTIES,
+    CATEGORIES,
 )
 from engine.thermo.nrtl import get_nrtl_params, NRTL_BINARY_PARAMS
 from engine.api.routes.vle import bubble_point_temperature, bubble_point_pressure, generate_txy_diagram, generate_pxy_diagram
@@ -36,22 +38,20 @@ def health():
 
 @app.get("/api/compounds")
 def list_compounds():
-    """List all compounds with Antoine coefficients and critical properties."""
-    compounds = []
-    for key, (A, B, C, T_min, T_max) in ANTOINE_COEFFICIENTS.items():
-        if key == "water_high":
-            continue  # skip alt-range entry
-        entry = {
-            "id": key,
-            "T_min_c": T_min,
-            "T_max_c": T_max,
+    """List all compounds with full metadata, grouped by category."""
+    details = get_all_compound_details()
+    # Build grouped response
+    grouped = {}
+    for cat_key, cat_meta in CATEGORIES.items():
+        members = [
+            details[k] for k in details if details[k]["category"] == cat_key
+        ]
+        grouped[cat_key] = {
+            "label": cat_meta["label"],
+            "order": cat_meta["order"],
+            "compounds": members,
         }
-        crit = CRITICAL_PROPERTIES.get(key)
-        if crit:
-            entry["Tc_c"] = crit[0]
-            entry["Pc_bar"] = crit[1]
-        compounds.append(entry)
-    return {"compounds": compounds}
+    return {"categories": grouped, "compounds": list(details.values())}
 
 
 @app.get("/api/vle/binary/pairs")

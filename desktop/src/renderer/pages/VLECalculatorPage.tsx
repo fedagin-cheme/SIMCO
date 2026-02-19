@@ -1,10 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   FlaskConical,
   Play,
   AlertCircle,
   AlertTriangle,
   Loader2,
+  ChevronRight,
+  Info,
+  Beaker,
+  Thermometer,
+  Shield,
+  Droplets,
 } from 'lucide-react'
 import {
   LineChart,
@@ -52,27 +58,35 @@ interface PxyResult {
 type Mode = 'pure' | 'binary'
 type BinarySpec = 'pressure' | 'temperature'
 
-// ─── Compound Data ──────────────────────────────────────────────────────────────
+// ─── Compound Registry Types ────────────────────────────────────────────────────
 
-const COMPOUNDS = [
-  { value: 'water',      label: 'Water (H₂O)' },
-  { value: 'methanol',   label: 'Methanol (CH₃OH)' },
-  { value: 'ethanol',    label: 'Ethanol (C₂H₅OH)' },
-  { value: 'benzene',    label: 'Benzene (C₆H₆)' },
-  { value: 'toluene',    label: 'Toluene (C₇H₈)' },
-  { value: 'acetone',    label: 'Acetone (C₃H₆O)' },
-  { value: 'n_hexane',   label: 'n-Hexane (C₆H₁₄)' },
-  { value: 'n_heptane',  label: 'n-Heptane (C₇H₁₆)' },
-  { value: 'chloroform', label: 'Chloroform (CHCl₃)' },
-  { value: 'CO2',        label: 'Carbon Dioxide (CO₂)' },
-  { value: 'H2S',        label: 'Hydrogen Sulfide (H₂S)' },
-  { value: 'MEA',        label: 'MEA (Monoethanolamine)' },
-  { value: 'MDEA',       label: 'MDEA' },
-  { value: 'nitrogen',   label: 'Nitrogen (N₂)' },
-  { value: 'oxygen',     label: 'Oxygen (O₂)' },
-  { value: 'methane',    label: 'Methane (CH₄)' },
-  { value: 'SO2',        label: 'Sulfur Dioxide (SO₂)' },
-]
+interface CompoundInfo {
+  key: string
+  name: string
+  formula: string
+  cas: string
+  mw: number
+  category: string
+  description: string
+  boiling_point_c: number | null
+  antoine: { A: number; B: number; C: number; T_min: number; T_max: number } | null
+  critical: { Tc_celsius: number; Pc_bar: number } | null
+}
+
+interface CategoryGroup {
+  label: string
+  order: number
+  compounds: CompoundInfo[]
+}
+
+// Category colors/icons for visual distinction
+const CATEGORY_STYLE: Record<string, { color: string; bg: string }> = {
+  acid_gas:         { color: 'text-red-400',    bg: 'bg-red-500/10' },
+  amine_solvent:    { color: 'text-blue-400',   bg: 'bg-blue-500/10' },
+  physical_solvent: { color: 'text-cyan-400',   bg: 'bg-cyan-500/10' },
+  carrier_gas:      { color: 'text-slate-400',  bg: 'bg-slate-500/10' },
+  organic:          { color: 'text-amber-400',  bg: 'bg-amber-500/10' },
+}
 
 const BINARY_PAIRS = [
   { comp1: 'methanol',   comp2: 'water',    label: 'Methanol / Water' },
@@ -142,43 +156,124 @@ export function VLECalculatorPage() {
 // ─── Pure Component View ────────────────────────────────────────────────────────
 
 function PureComponentView() {
-  const [component, setComponent] = useState('water')
+  const [categories, setCategories] = useState<Record<string, CategoryGroup>>({})
+  const [allCompounds, setAllCompounds] = useState<CompoundInfo[]>([])
+  const [selected, setSelected] = useState<CompoundInfo | null>(null)
+  const [activeCategory, setActiveCategory] = useState<string>('acid_gas')
   const [temperature, setTemperature] = useState('25')
   const [pressure, setPressure] = useState('1.01325')
   const [result, setResult] = useState<BubbleDewResult | null>(null)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   const { loading, error, call } = useEngine<BubbleDewResult>()
 
+  // Fetch compound registry on mount
+  useEffect(() => {
+    fetch('http://localhost:8742/api/compounds')
+      .then((r) => r.json())
+      .then((data) => {
+        setCategories(data.categories)
+        setAllCompounds(data.compounds)
+        // Select first acid gas by default
+        const firstGas = data.categories?.acid_gas?.compounds?.[0]
+        if (firstGas) setSelected(firstGas)
+      })
+      .catch((e) => setFetchError(e.message))
+  }, [])
+
   async function handleCalculate() {
+    if (!selected) return
     const data = await call('/api/vle/bubble-dew', {
-      component,
+      component: selected.key,
       temperature_c: parseFloat(temperature),
       pressure_bar: parseFloat(pressure),
     })
     if (data) setResult(data)
   }
 
+  // Sorted category keys
+  const sortedCats = Object.entries(categories)
+    .sort(([, a], [, b]) => a.order - b.order)
+    .map(([key]) => key)
+
+  const currentCatCompounds = categories[activeCategory]?.compounds ?? []
+
+  if (fetchError) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <ErrorMessage message={`Failed to load compounds: ${fetchError}`} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex gap-4 flex-1 min-h-0">
-      {/* Inputs */}
-      <div className="w-72 flex-shrink-0 space-y-4">
-        <div className="panel p-4 space-y-4">
-          <p className="label">Inputs</p>
+      {/* Left: Compound Browser */}
+      <div className="w-72 flex-shrink-0 flex flex-col gap-3 min-h-0">
+        {/* Category tabs */}
+        <div className="panel p-2 flex flex-wrap gap-1">
+          {sortedCats.map((catKey) => {
+            const cat = categories[catKey]
+            const style = CATEGORY_STYLE[catKey] ?? CATEGORY_STYLE.organic
+            const isActive = catKey === activeCategory
+            return (
+              <button
+                key={catKey}
+                onClick={() => setActiveCategory(catKey)}
+                className={`px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
+                  isActive
+                    ? `${style.bg} ${style.color} ring-1 ring-current/30`
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {cat.label}
+              </button>
+            )
+          })}
+        </div>
 
-          <Field label="Component">
-            <select
-              value={component}
-              onChange={(e) => setComponent(e.target.value)}
-              className="input-field w-full"
-            >
-              {COMPOUNDS.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </Field>
+        {/* Compound list */}
+        <div className="panel flex-1 overflow-y-auto min-h-0">
+          {currentCatCompounds.map((comp) => {
+            const isSelected = selected?.key === comp.key
+            return (
+              <button
+                key={comp.key}
+                onClick={() => {
+                  setSelected(comp)
+                  setResult(null)
+                }}
+                className={`w-full text-left px-3 py-2.5 border-b border-surface-700/50 transition-colors ${
+                  isSelected
+                    ? 'bg-primary-600/10 border-l-2 border-l-primary-500'
+                    : 'hover:bg-surface-700/30 border-l-2 border-l-transparent'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p
+                      className={`text-sm font-medium ${
+                        isSelected ? 'text-primary-400' : 'text-slate-200'
+                      }`}
+                    >
+                      {comp.name}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {comp.formula} · MW {comp.mw}
+                    </p>
+                  </div>
+                  {isSelected && (
+                    <ChevronRight size={12} className="text-primary-500" />
+                  )}
+                </div>
+              </button>
+            )
+          })}
+        </div>
 
+        {/* Calculator */}
+        <div className="panel p-3 space-y-3">
+          <p className="label text-xs">Quick Calculate</p>
           <Field label="Temperature">
             <div className="flex gap-2">
               <input
@@ -191,7 +286,6 @@ function PureComponentView() {
               <Unit>°C</Unit>
             </div>
           </Field>
-
           <Field label="Pressure">
             <div className="flex gap-2">
               <input
@@ -204,10 +298,9 @@ function PureComponentView() {
               <Unit>bar</Unit>
             </div>
           </Field>
-
           <button
             onClick={handleCalculate}
-            disabled={loading}
+            disabled={loading || !selected}
             className="btn-primary w-full flex items-center justify-center gap-2"
           >
             {loading ? (
@@ -220,73 +313,183 @@ function PureComponentView() {
               </>
             )}
           </button>
-
           <ErrorMessage message={error} />
         </div>
-
-        {/* Results */}
-        {result && (
-          <div className="panel p-4 space-y-3">
-            <p className="label">Results</p>
-            <ResultRow label="Component" value={result.component} />
-            <ResultRow
-              label="Boiling Point"
-              value={`${result.bubble_temperature_c.toFixed(2)} °C`}
-            />
-            <ResultRow
-              label="Sat. Pressure"
-              value={`${result.saturation_pressure_bar.toFixed(4)} bar`}
-            />
-            {result.warning && <WarningMessage message={result.warning} />}
-          </div>
-        )}
       </div>
 
-      {/* Right panel — info */}
-      <div className="flex-1 panel p-4 flex flex-col min-w-0">
-        <p className="label mb-4">Component Info</p>
-        {result ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center space-y-4 max-w-xs">
-              <div className="p-3 bg-primary-600/10 rounded-full w-14 h-14 flex items-center justify-center mx-auto">
-                <FlaskConical size={24} className="text-primary-500" />
-              </div>
-              <div className="space-y-2">
-                <p className="text-slate-200 font-medium">
-                  {COMPOUNDS.find((c) => c.value === result.component)?.label ??
-                    result.component}
-                </p>
-                <div className="space-y-1 text-sm">
-                  <p className="text-slate-400">
-                    At{' '}
-                    <span className="value-display">
-                      {result.temperature_c} °C
-                    </span>{' '}
-                    &{' '}
-                    <span className="value-display">
-                      {result.pressure_bar} bar
-                    </span>
-                  </p>
-                  <p className="text-slate-400">
-                    Boiling point:{' '}
-                    <span className="value-display">
-                      {result.bubble_temperature_c.toFixed(2)} °C
-                    </span>
-                  </p>
-                  <p className="text-slate-400">
-                    Vapor pressure:{' '}
-                    <span className="value-display">
-                      {result.saturation_pressure_bar.toFixed(4)} bar
-                    </span>
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
+      {/* Right: Property Card */}
+      <div className="flex-1 panel p-0 flex flex-col min-w-0 min-h-0 overflow-y-auto">
+        {selected ? (
+          <CompoundPropertyCard
+            compound={selected}
+            result={result}
+          />
         ) : (
-          <EmptyState message="Select a component and run a calculation" />
+          <EmptyState message="Select a component to view properties" />
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── Compound Property Card ────────────────────────────────────────────────────
+
+function CompoundPropertyCard({
+  compound,
+  result,
+}: {
+  compound: CompoundInfo
+  result: BubbleDewResult | null
+}) {
+  const style = CATEGORY_STYLE[compound.category] ?? CATEGORY_STYLE.organic
+
+  return (
+    <div className="flex flex-col gap-0">
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-surface-700/50">
+        <div className="flex items-start gap-3">
+          <div className={`p-2 rounded-lg ${style.bg}`}>
+            <FlaskConical size={20} className={style.color} />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-slate-100 font-semibold text-base">
+              {compound.name}
+            </h2>
+            <p className="text-slate-500 text-sm mt-0.5">
+              {compound.formula} · CAS {compound.cas}
+            </p>
+            <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+              {compound.description}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Basic Properties */}
+      <PropertySection icon={<Info size={14} />} title="Basic Properties">
+        <PropGrid>
+          <PropCell label="Molecular Weight" value={`${compound.mw} g/mol`} />
+          <PropCell label="Formula" value={compound.formula} />
+          <PropCell label="CAS Number" value={compound.cas} />
+          <PropCell
+            label="Normal Boiling Point"
+            value={
+              compound.boiling_point_c !== null
+                ? `${compound.boiling_point_c.toFixed(1)} °C`
+                : '—'
+            }
+          />
+          {compound.critical && (
+            <>
+              <PropCell
+                label="Critical Temperature"
+                value={`${compound.critical.Tc_celsius.toFixed(1)} °C`}
+              />
+              <PropCell
+                label="Critical Pressure"
+                value={`${compound.critical.Pc_bar.toFixed(2)} bar`}
+              />
+            </>
+          )}
+        </PropGrid>
+      </PropertySection>
+
+      {/* Thermodynamic Data */}
+      <PropertySection icon={<Thermometer size={14} />} title="Thermodynamic Data">
+        {compound.antoine ? (
+          <PropGrid>
+            <PropCell label="Antoine A" value={compound.antoine.A.toFixed(4)} />
+            <PropCell label="Antoine B" value={compound.antoine.B.toFixed(3)} />
+            <PropCell label="Antoine C" value={compound.antoine.C.toFixed(3)} />
+            <PropCell
+              label="Valid Range"
+              value={`${compound.antoine.T_min} to ${compound.antoine.T_max} °C`}
+            />
+          </PropGrid>
+        ) : (
+          <p className="text-slate-500 text-xs">No Antoine data available</p>
+        )}
+      </PropertySection>
+
+      {/* Calculation Results (if available) */}
+      {result && (
+        <PropertySection icon={<Beaker size={14} />} title="Calculation Results">
+          <PropGrid>
+            <PropCell
+              label={`Boiling Point at ${result.pressure_bar} bar`}
+              value={`${result.bubble_temperature_c.toFixed(2)} °C`}
+              highlight
+            />
+            <PropCell
+              label={`Saturation Pressure at ${result.temperature_c} °C`}
+              value={`${result.saturation_pressure_bar.toFixed(4)} bar`}
+              highlight
+            />
+          </PropGrid>
+          {result.warning && <WarningMessage message={result.warning} />}
+        </PropertySection>
+      )}
+
+      {/* Transport Properties (placeholder) */}
+      <PropertySection icon={<Droplets size={14} />} title="Transport Properties">
+        <p className="text-slate-600 text-xs italic">
+          Density, viscosity, heat capacity, diffusivity — coming in Phase B
+        </p>
+      </PropertySection>
+
+      {/* Safety (placeholder) */}
+      <PropertySection icon={<Shield size={14} />} title="Safety & Regulatory">
+        <p className="text-slate-600 text-xs italic">
+          NFPA diamond, TLV/TWA, exposure limits — coming in Phase C
+        </p>
+      </PropertySection>
+    </div>
+  )
+}
+
+function PropertySection({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="px-5 py-3 border-b border-surface-700/50">
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-slate-400">{icon}</span>
+        <p className="text-slate-300 text-sm font-medium">{title}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function PropGrid({ children }: { children: React.ReactNode }) {
+  return <div className="grid grid-cols-2 gap-x-6 gap-y-2">{children}</div>
+}
+
+function PropCell({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string
+  value: string
+  highlight?: boolean
+}) {
+  return (
+    <div>
+      <p className="text-slate-500 text-xs">{label}</p>
+      <p
+        className={`text-sm font-mono mt-0.5 ${
+          highlight ? 'text-primary-400 font-medium' : 'text-slate-200'
+        }`}
+      >
+        {value}
+      </p>
     </div>
   )
 }
