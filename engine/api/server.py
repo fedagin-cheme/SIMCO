@@ -16,6 +16,12 @@ from engine.thermo.antoine import (
 )
 from engine.thermo.nrtl import get_nrtl_params, NRTL_BINARY_PARAMS
 from engine.api.routes.vle import bubble_point_temperature, bubble_point_pressure, generate_txy_diagram, generate_pxy_diagram
+from engine.thermo.electrolyte_vle import (
+    get_available_electrolytes,
+    generate_bpe_curve,
+    generate_vp_curve,
+    calculate_operating_point,
+)
 
 app = FastAPI(title="SIMCO Engine", version="0.1.0")
 
@@ -183,6 +189,75 @@ def pxy_diagram(req: PxyDiagramRequest):
     """Generate full Pxy diagram data for a binary mixture at constant temperature."""
     try:
         data = generate_pxy_diagram(req.temperature_c, req.comp1, req.comp2, req.n_points)
+        return data
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Electrolyte VLE (BPE / Vapor Pressure Depression) ──────────────────────────
+
+@app.get("/api/vle/electrolyte/solutes")
+def list_electrolyte_solutes():
+    """List available electrolyte solutes for BPE/VP calculations."""
+    return {"solutes": get_available_electrolytes()}
+
+
+class BpeCurveRequest(BaseModel):
+    solute: str
+    pressure_bar: float = 1.01325
+
+
+@app.post("/api/vle/electrolyte/bpe-curve")
+def electrolyte_bpe_curve(req: BpeCurveRequest):
+    """Generate boiling point elevation curve (T_boil vs w/w%)."""
+    try:
+        P_pa = req.pressure_bar * 1e5
+        data = generate_bpe_curve(req.solute, P_pa)
+        data["pressure_bar"] = req.pressure_bar
+        return data
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class VpCurveRequest(BaseModel):
+    solute: str
+    temperature_c: float = 100.0
+
+
+@app.post("/api/vle/electrolyte/vp-curve")
+def electrolyte_vp_curve(req: VpCurveRequest):
+    """Generate vapor pressure depression curve (P_water vs w/w%)."""
+    try:
+        data = generate_vp_curve(req.solute, req.temperature_c)
+        return data
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class OperatingPointRequest(BaseModel):
+    solute: str
+    w_percent: float
+    temperature_c: Optional[float] = None
+    pressure_bar: Optional[float] = None
+
+
+@app.post("/api/vle/electrolyte/operating-point")
+def electrolyte_operating_point(req: OperatingPointRequest):
+    """Calculate operating point for an electrolyte solution."""
+    try:
+        P_pa = req.pressure_bar * 1e5 if req.pressure_bar is not None else None
+        data = calculate_operating_point(
+            req.solute,
+            req.w_percent,
+            T_celsius=req.temperature_c,
+            P_pa=P_pa,
+        )
         return data
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

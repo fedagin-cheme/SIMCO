@@ -21,6 +21,7 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
+  ReferenceDot,
 } from 'recharts'
 import { useEngine } from '../hooks/useEngine'
 
@@ -55,8 +56,54 @@ interface PxyResult {
   P_bar: number[]
 }
 
-type Mode = 'pure' | 'binary'
+type Mode = 'pure' | 'binary' | 'scrubbing'
 type BinarySpec = 'pressure' | 'temperature'
+type ScrubbingFamily = 'electrolyte' | 'amine'
+type ElectrolyteSpec = 'pressure' | 'temperature'
+
+interface ElectrolyteSolute {
+  id: string
+  name: string
+  formula: string
+  mw: number
+  max_wt_pct: number
+}
+
+interface BpeCurveResult {
+  solute: string
+  solute_name: string
+  formula: string
+  P_pa: number
+  T_water: number
+  w_percent: number[]
+  T_boil: number[]
+  bpe: number[]
+  pressure_bar: number
+}
+
+interface VpCurveResult {
+  solute: string
+  solute_name: string
+  formula: string
+  T_celsius: number
+  P_pure_water: number
+  w_percent: number[]
+  P_water: number[]
+  vpd: number[]
+}
+
+interface OperatingPointResult {
+  solute: string
+  solute_name: string
+  formula: string
+  w_percent: number
+  T_boil_celsius: number
+  P_water_pa: number
+  P_water_kpa: number
+  bpe_celsius: number
+  water_activity: number
+  P_total_pa: number | null
+}
 
 // ─── Compound Registry Types ────────────────────────────────────────────────────
 
@@ -97,6 +144,11 @@ const BINARY_PAIRS = [
   { comp1: 'methanol',   comp2: 'benzene',  label: 'Methanol / Benzene' },
   { comp1: 'ethanol',    comp2: 'benzene',  label: 'Ethanol / Benzene' },
   { comp1: 'chloroform', comp2: 'methanol', label: 'Chloroform / Methanol' },
+]
+
+const AMINE_PAIRS = [
+  { comp1: 'mea',  comp2: 'water', label: 'MEA / Water' },
+  { comp1: 'mdea', comp2: 'water', label: 'MDEA / Water' },
 ]
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
@@ -144,11 +196,27 @@ export function VLECalculatorPage() {
           >
             Binary Mixture
           </button>
+          <button
+            onClick={() => setMode('scrubbing')}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              mode === 'scrubbing'
+                ? 'bg-primary-600/20 text-primary-400'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Scrubbing Solvents
+          </button>
         </div>
       </div>
 
       {/* Body */}
-      {mode === 'pure' ? <PureComponentView /> : <BinaryMixtureView />}
+      {mode === 'pure' ? (
+        <PureComponentView />
+      ) : mode === 'binary' ? (
+        <BinaryMixtureView />
+      ) : (
+        <ScrubbingSolventView />
+      )}
     </div>
   )
 }
@@ -945,6 +1013,787 @@ function BinaryMixtureView() {
     </div>
   )
 }
+
+// ─── Scrubbing Solvent View ─────────────────────────────────────────────────────
+
+function ScrubbingSolventView() {
+  const [family, setFamily] = useState<ScrubbingFamily>('electrolyte')
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 gap-4">
+      {/* Family Toggle */}
+      <div className="flex bg-surface-800 border border-surface-600 rounded-lg p-0.5 self-start">
+        <button
+          onClick={() => setFamily('electrolyte')}
+          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            family === 'electrolyte'
+              ? 'bg-amber-600/20 text-amber-400'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Electrolyte Solution
+        </button>
+        <button
+          onClick={() => setFamily('amine')}
+          className={`px-4 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            family === 'amine'
+              ? 'bg-blue-600/20 text-blue-400'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Amine Solution
+        </button>
+      </div>
+
+      {family === 'electrolyte' ? <ElectrolyteView /> : <AmineSolventView />}
+    </div>
+  )
+}
+
+// ─── Electrolyte Sub-View ───────────────────────────────────────────────────────
+
+function ElectrolyteView() {
+  const [solutes, setSolutes] = useState<ElectrolyteSolute[]>([])
+  const [soluteId, setSoluteId] = useState('NaOH')
+  const [eSpec, setESpec] = useState<ElectrolyteSpec>('pressure')
+  const [pressure, setPressure] = useState('1.01325')
+  const [temperature, setTemperature] = useState('100')
+  const [wPercent, setWPercent] = useState('25')
+  const [bpeData, setBpeData] = useState<BpeCurveResult | null>(null)
+  const [vpData, setVpData] = useState<VpCurveResult | null>(null)
+  const [opPoint, setOpPoint] = useState<OperatingPointResult | null>(null)
+
+  const { loading, error, call } = useEngine()
+
+  // Load solutes on mount
+  useEffect(() => {
+    async function loadSolutes() {
+      const data = await call('/api/vle/electrolyte/solutes')
+      if (data) setSolutes((data as any).solutes)
+    }
+    loadSolutes()
+  }, [])
+
+  async function handleGenerate() {
+    const w = parseFloat(wPercent)
+
+    if (eSpec === 'pressure') {
+      const P = parseFloat(pressure)
+      // BPE curve
+      const bpe = await call('/api/vle/electrolyte/bpe-curve', {
+        solute: soluteId,
+        pressure_bar: P,
+      })
+      if (bpe) setBpeData(bpe as BpeCurveResult)
+
+      // VP curve at T=boiling point of pure water at this P
+      const vpTemp = bpe ? (bpe as BpeCurveResult).T_water : 100
+      const vp = await call('/api/vle/electrolyte/vp-curve', {
+        solute: soluteId,
+        temperature_c: vpTemp,
+      })
+      if (vp) setVpData(vp as VpCurveResult)
+
+      // Operating point
+      const op = await call('/api/vle/electrolyte/operating-point', {
+        solute: soluteId,
+        w_percent: w,
+        pressure_bar: P,
+      })
+      if (op) setOpPoint(op as OperatingPointResult)
+    } else {
+      const T = parseFloat(temperature)
+      // VP curve at specified T
+      const vp = await call('/api/vle/electrolyte/vp-curve', {
+        solute: soluteId,
+        temperature_c: T,
+      })
+      if (vp) setVpData(vp as VpCurveResult)
+
+      // BPE curve at 1 atm (reference)
+      const bpe = await call('/api/vle/electrolyte/bpe-curve', {
+        solute: soluteId,
+        pressure_bar: 1.01325,
+      })
+      if (bpe) setBpeData(bpe as BpeCurveResult)
+
+      // Operating point
+      const op = await call('/api/vle/electrolyte/operating-point', {
+        solute: soluteId,
+        w_percent: w,
+        temperature_c: T,
+      })
+      if (op) setOpPoint(op as OperatingPointResult)
+    }
+  }
+
+  const activeSolute = solutes.find((s) => s.id === soluteId)
+
+  // BPE chart data
+  const bpeChartData =
+    bpeData?.w_percent.map((w, i) => ({
+      w,
+      T: bpeData.T_boil[i],
+      BPE: bpeData.bpe[i],
+    })) ?? []
+
+  // VP chart data
+  const vpChartData =
+    vpData?.w_percent.map((w, i) => ({
+      w,
+      P_kPa: vpData.P_water[i] / 1000,
+    })) ?? []
+
+  const opW = opPoint?.w_percent ?? null
+  const opTBoil = opPoint?.T_boil_celsius ?? null
+  const opPKpa = opPoint ? opPoint.P_water_pa / 1000 : null
+
+  return (
+    <div className="flex gap-4 flex-1 min-h-0">
+      {/* Inputs */}
+      <div className="w-72 flex-shrink-0 space-y-4">
+        <div className="panel p-4 space-y-4">
+          <p className="label">Electrolyte Solution</p>
+
+          <Field label="Solute">
+            <select
+              value={soluteId}
+              onChange={(e) => setSoluteId(e.target.value)}
+              className="input-field w-full"
+            >
+              {solutes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.formula})
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label={`Concentration (w/w%)${activeSolute ? ` · max ${activeSolute.max_wt_pct}%` : ''}`}>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={wPercent}
+                onChange={(e) => setWPercent(e.target.value)}
+                className="input-field flex-1"
+                step="1"
+                min="0"
+                max={activeSolute?.max_wt_pct ?? 50}
+              />
+              <Unit>w/w%</Unit>
+            </div>
+          </Field>
+
+          {/* Spec Toggle */}
+          <Field label="Specify">
+            <div className="flex bg-surface-700 border border-surface-500 rounded-md p-0.5">
+              <button
+                onClick={() => setESpec('pressure')}
+                className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  eSpec === 'pressure'
+                    ? 'bg-amber-600/20 text-amber-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Pressure → T<sub>boil</sub>
+              </button>
+              <button
+                onClick={() => setESpec('temperature')}
+                className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  eSpec === 'temperature'
+                    ? 'bg-amber-600/20 text-amber-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Temperature → P<sub>water</sub>
+              </button>
+            </div>
+          </Field>
+
+          {eSpec === 'pressure' ? (
+            <Field label="System Pressure">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={pressure}
+                  onChange={(e) => setPressure(e.target.value)}
+                  className="input-field flex-1"
+                  step="0.1"
+                />
+                <Unit>bar</Unit>
+              </div>
+            </Field>
+          ) : (
+            <Field label="Temperature">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={temperature}
+                  onChange={(e) => setTemperature(e.target.value)}
+                  className="input-field flex-1"
+                  step="1"
+                />
+                <Unit>°C</Unit>
+              </div>
+            </Field>
+          )}
+
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="btn-primary w-full flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Calculating…
+              </>
+            ) : (
+              <>
+                <Play size={14} /> Calculate
+              </>
+            )}
+          </button>
+
+          <ErrorMessage message={error} />
+        </div>
+
+        {/* Operating Point Summary */}
+        {opPoint && (
+          <div className="panel p-4 space-y-3">
+            <p className="label">Operating Point</p>
+            <ResultRow label="Solute" value={`${opPoint.solute_name} (${opPoint.formula})`} />
+            <ResultRow label="Concentration" value={`${opPoint.w_percent} w/w%`} />
+            <ResultRow label="Boiling Point" value={`${opPoint.T_boil_celsius} °C`} />
+            <ResultRow label="BPE" value={`${opPoint.bpe_celsius} °C`} />
+            <ResultRow label="P (water vapor)" value={`${opPoint.P_water_kpa} kPa`} />
+            <ResultRow label="Water Activity" value={`${opPoint.water_activity}`} />
+          </div>
+        )}
+      </div>
+
+      {/* Dual Charts */}
+      <div className="flex-1 flex flex-col gap-4 min-w-0">
+        {/* BPE Curve */}
+        <div className="flex-1 panel p-4 flex flex-col min-h-0">
+          <p className="label mb-3">
+            Boiling Point Elevation
+            {bpeData ? ` — ${bpeData.solute_name} at ${bpeData.pressure_bar} bar` : ''}
+          </p>
+          {bpeChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={bpeChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+                <XAxis
+                  dataKey="w"
+                  type="number"
+                  domain={[0, 'dataMax']}
+                  stroke="#484f58"
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  label={{
+                    value: 'Concentration (w/w%)',
+                    position: 'insideBottom',
+                    offset: -5,
+                    fill: '#64748b',
+                    fontSize: 11,
+                  }}
+                />
+                <YAxis
+                  stroke="#484f58"
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  domain={['dataMin', 'dataMax']}
+                  label={{
+                    value: 'Boiling Point (°C)',
+                    angle: -90,
+                    position: 'insideLeft',
+                    offset: 10,
+                    fill: '#64748b',
+                    fontSize: 11,
+                  }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1c2128',
+                    border: '1px solid #30363d',
+                    borderRadius: 6,
+                    fontSize: 12,
+                  }}
+                  labelFormatter={(v) => `${v} w/w%`}
+                  formatter={(value: number) => [`${value.toFixed(1)} °C`, 'T_boil']}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="T"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={false}
+                  name="T_boil"
+                />
+                {opW !== null && opTBoil !== null && (
+                  <ReferenceDot
+                    x={opW}
+                    y={opTBoil}
+                    r={6}
+                    fill="#ef4444"
+                    stroke="#fff"
+                    strokeWidth={2}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState message="Select a solute and calculate to see the BPE curve" />
+          )}
+        </div>
+
+        {/* VP Depression Curve */}
+        <div className="flex-1 panel p-4 flex flex-col min-h-0">
+          <p className="label mb-3">
+            Vapor Pressure Depression
+            {vpData ? ` — ${vpData.solute_name} at ${vpData.T_celsius.toFixed(1)} °C` : ''}
+          </p>
+          {vpChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={vpChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+                <XAxis
+                  dataKey="w"
+                  type="number"
+                  domain={[0, 'dataMax']}
+                  stroke="#484f58"
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  label={{
+                    value: 'Concentration (w/w%)',
+                    position: 'insideBottom',
+                    offset: -5,
+                    fill: '#64748b',
+                    fontSize: 11,
+                  }}
+                />
+                <YAxis
+                  stroke="#484f58"
+                  tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  domain={[0, 'dataMax']}
+                  label={{
+                    value: 'P_water (kPa)',
+                    angle: -90,
+                    position: 'insideLeft',
+                    offset: 10,
+                    fill: '#64748b',
+                    fontSize: 11,
+                  }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1c2128',
+                    border: '1px solid #30363d',
+                    borderRadius: 6,
+                    fontSize: 12,
+                  }}
+                  labelFormatter={(v) => `${v} w/w%`}
+                  formatter={(value: number) => [`${value.toFixed(2)} kPa`, 'P_water']}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="P_kPa"
+                  stroke="#14b8a6"
+                  strokeWidth={2}
+                  dot={false}
+                  name="P_water"
+                />
+                {opW !== null && opPKpa !== null && (
+                  <ReferenceDot
+                    x={opW}
+                    y={opPKpa}
+                    r={6}
+                    fill="#ef4444"
+                    stroke="#fff"
+                    strokeWidth={2}
+                  />
+                )}
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState message="Calculate to see the vapor pressure curve" />
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Amine Solvent Sub-View ─────────────────────────────────────────────────────
+
+function AmineSolventView() {
+  const [pairIndex, setPairIndex] = useState(0)
+  const [spec, setSpec] = useState<BinarySpec>('pressure')
+  const [pressure, setPressure] = useState('1.01325')
+  const [temperature, setTemperature] = useState('80')
+  const [txyData, setTxyData] = useState<TxyResult | null>(null)
+  const [pxyData, setPxyData] = useState<PxyResult | null>(null)
+
+  const { loading, error, call } = useEngine<TxyResult | PxyResult>()
+
+  const pair = AMINE_PAIRS[pairIndex]
+
+  async function handleGenerate() {
+    if (spec === 'pressure') {
+      const data = await call('/api/vle/binary/txy', {
+        comp1: pair.comp1,
+        comp2: pair.comp2,
+        pressure_bar: parseFloat(pressure),
+        n_points: 51,
+      })
+      if (data) {
+        setTxyData(data as TxyResult)
+        setPxyData(null)
+      }
+    } else {
+      const data = await call('/api/vle/binary/pxy', {
+        comp1: pair.comp1,
+        comp2: pair.comp2,
+        temperature_c: parseFloat(temperature),
+        n_points: 51,
+      })
+      if (data) {
+        setPxyData(data as PxyResult)
+        setTxyData(null)
+      }
+    }
+  }
+
+  const isTxy = spec === 'pressure' && txyData != null
+  const isPxy = spec === 'temperature' && pxyData != null
+  const activeData = isTxy ? txyData : isPxy ? pxyData : null
+
+  // Txy chart data
+  const txyChartData = (() => {
+    if (!txyData) return []
+    const bubbleCurve = txyData.x1.map((x, i) => ({
+      composition: parseFloat(x.toFixed(4)),
+      T: parseFloat(txyData.T_celsius[i].toFixed(2)),
+    }))
+    const dewCurve = txyData.y1.map((y, i) => ({
+      composition: parseFloat((y as number).toFixed(4)),
+      T: parseFloat(txyData.T_celsius[i].toFixed(2)),
+    }))
+    const compositionSet = new Set<number>()
+    bubbleCurve.forEach((p) => compositionSet.add(p.composition))
+    dewCurve.forEach((p) => compositionSet.add(p.composition))
+    const allComps = Array.from(compositionSet).sort((a, b) => a - b)
+    const bubbleMap = new Map(bubbleCurve.map((p) => [p.composition, p.T]))
+    const dewMap = new Map(dewCurve.map((p) => [p.composition, p.T]))
+    return allComps.map((z) => ({
+      z,
+      Bubble: bubbleMap.get(z) ?? null,
+      Dew: dewMap.get(z) ?? null,
+    }))
+  })()
+
+  // Pxy chart data
+  const pxyChartData = (() => {
+    if (!pxyData) return []
+    const bubbleCurve = pxyData.x1.map((x, i) => ({
+      composition: parseFloat(x.toFixed(4)),
+      P: parseFloat(pxyData.P_bar[i].toFixed(5)),
+    }))
+    const dewCurve = pxyData.y1.map((y, i) => ({
+      composition: parseFloat((y as number).toFixed(4)),
+      P: parseFloat(pxyData.P_bar[i].toFixed(5)),
+    }))
+    const compositionSet = new Set<number>()
+    bubbleCurve.forEach((p) => compositionSet.add(p.composition))
+    dewCurve.forEach((p) => compositionSet.add(p.composition))
+    const allComps = Array.from(compositionSet).sort((a, b) => a - b)
+    const bubbleMap = new Map(bubbleCurve.map((p) => [p.composition, p.P]))
+    const dewMap = new Map(dewCurve.map((p) => [p.composition, p.P]))
+    return allComps.map((z) => ({
+      z,
+      Bubble: bubbleMap.get(z) ?? null,
+      Dew: dewMap.get(z) ?? null,
+    }))
+  })()
+
+  const comp1Label = activeData?.comp1 ?? pair.comp1
+
+  return (
+    <div className="flex gap-4 flex-1 min-h-0">
+      {/* Inputs */}
+      <div className="w-72 flex-shrink-0 space-y-4">
+        <div className="panel p-4 space-y-4">
+          <p className="label">Amine-Water Binary</p>
+
+          <Field label="Amine Solvent">
+            <select
+              value={pairIndex}
+              onChange={(e) => setPairIndex(Number(e.target.value))}
+              className="input-field w-full"
+            >
+              {AMINE_PAIRS.map((p, i) => (
+                <option key={i} value={i}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          {/* Spec Toggle */}
+          <Field label="Diagram Type">
+            <div className="flex bg-surface-700 border border-surface-500 rounded-md p-0.5">
+              <button
+                onClick={() => setSpec('pressure')}
+                className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  spec === 'pressure'
+                    ? 'bg-blue-600/20 text-blue-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Pressure (Txy)
+              </button>
+              <button
+                onClick={() => setSpec('temperature')}
+                className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-colors ${
+                  spec === 'temperature'
+                    ? 'bg-blue-600/20 text-blue-400'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Temperature (Pxy)
+              </button>
+            </div>
+          </Field>
+
+          {spec === 'pressure' ? (
+            <Field label="System Pressure">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={pressure}
+                  onChange={(e) => setPressure(e.target.value)}
+                  className="input-field flex-1"
+                  step="0.1"
+                />
+                <Unit>bar</Unit>
+              </div>
+            </Field>
+          ) : (
+            <Field label="System Temperature">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  value={temperature}
+                  onChange={(e) => setTemperature(e.target.value)}
+                  className="input-field flex-1"
+                  step="1"
+                />
+                <Unit>°C</Unit>
+              </div>
+            </Field>
+          )}
+
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="btn-primary w-full flex items-center justify-center gap-2"
+          >
+            {loading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Generating…
+              </>
+            ) : (
+              <>
+                <Play size={14} /> Generate Diagram
+              </>
+            )}
+          </button>
+
+          <ErrorMessage message={error} />
+        </div>
+
+        {/* Summary */}
+        {activeData && (
+          <div className="panel p-4 space-y-3">
+            <p className="label">System Summary</p>
+            <ResultRow
+              label="Amine"
+              value={activeData.comp1.toUpperCase()}
+            />
+            {isTxy && txyData && (
+              <>
+                <ResultRow
+                  label="Pressure"
+                  value={`${txyData.pressure_bar} bar`}
+                />
+                <ResultRow
+                  label="T (pure water)"
+                  value={`${txyData.T_celsius[0].toFixed(1)} °C`}
+                />
+                <ResultRow
+                  label="T (pure amine)"
+                  value={`${txyData.T_celsius[txyData.T_celsius.length - 1].toFixed(1)} °C`}
+                />
+              </>
+            )}
+            {isPxy && pxyData && (
+              <>
+                <ResultRow
+                  label="Temperature"
+                  value={`${pxyData.T_celsius} °C`}
+                />
+                <ResultRow
+                  label="P (pure water)"
+                  value={`${pxyData.P_bar[0].toFixed(4)} bar`}
+                />
+                <ResultRow
+                  label="P (pure amine)"
+                  value={`${pxyData.P_bar[pxyData.P_bar.length - 1].toFixed(4)} bar`}
+                />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Chart */}
+      <div className="flex-1 panel p-4 flex flex-col min-h-0">
+        <p className="label mb-3">
+          {isTxy
+            ? `Txy Diagram — ${comp1Label.toUpperCase()} / Water`
+            : isPxy
+              ? `Pxy Diagram — ${comp1Label.toUpperCase()} / Water`
+              : 'Phase Diagram'}
+        </p>
+        {isTxy && txyChartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={txyChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+              <XAxis
+                dataKey="z"
+                type="number"
+                domain={[0, 1]}
+                stroke="#484f58"
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                label={{
+                  value: `Mole fraction ${comp1Label.toUpperCase()}`,
+                  position: 'insideBottom',
+                  offset: -5,
+                  fill: '#64748b',
+                  fontSize: 11,
+                }}
+              />
+              <YAxis
+                stroke="#484f58"
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                label={{
+                  value: 'Temperature (°C)',
+                  angle: -90,
+                  position: 'insideLeft',
+                  offset: 10,
+                  fill: '#64748b',
+                  fontSize: 11,
+                }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1c2128',
+                  border: '1px solid #30363d',
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}
+                labelFormatter={(v) => `z = ${v}`}
+              />
+              <Legend
+                wrapperStyle={{ paddingTop: 8, fontSize: 12, color: '#94a3b8' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Bubble"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={false}
+                name="Bubble (liquid)"
+                connectNulls
+              />
+              <Line
+                type="monotone"
+                dataKey="Dew"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                dot={false}
+                name="Dew (vapor)"
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : isPxy && pxyChartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={pxyChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#21262d" />
+              <XAxis
+                dataKey="z"
+                type="number"
+                domain={[0, 1]}
+                stroke="#484f58"
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                label={{
+                  value: `Mole fraction ${comp1Label.toUpperCase()}`,
+                  position: 'insideBottom',
+                  offset: -5,
+                  fill: '#64748b',
+                  fontSize: 11,
+                }}
+              />
+              <YAxis
+                stroke="#484f58"
+                tick={{ fill: '#94a3b8', fontSize: 11 }}
+                label={{
+                  value: 'Pressure (bar)',
+                  angle: -90,
+                  position: 'insideLeft',
+                  offset: 10,
+                  fill: '#64748b',
+                  fontSize: 11,
+                }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1c2128',
+                  border: '1px solid #30363d',
+                  borderRadius: 6,
+                  fontSize: 12,
+                }}
+                labelFormatter={(v) => `z = ${v}`}
+              />
+              <Legend
+                wrapperStyle={{ paddingTop: 8, fontSize: 12, color: '#94a3b8' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Bubble"
+                stroke="#3b82f6"
+                strokeWidth={2}
+                dot={false}
+                name="Bubble (liquid)"
+                connectNulls
+              />
+              <Line
+                type="monotone"
+                dataKey="Dew"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                dot={false}
+                name="Dew (vapor)"
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyState message="Select an amine and generate the diagram" />
+        )}
+      </div>
+    </div>
+  )
+}
+
 
 // ─── Shared Components ──────────────────────────────────────────────────────────
 

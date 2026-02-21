@@ -125,6 +125,7 @@ def _infinite_dilution_gamma2(T_kelvin, dg12, dg21, alpha12):
 # Source: DECHEMA, Gmehling et al.
 
 NRTL_BINARY_PARAMS = {
+    # Classic organic pairs (DECHEMA)
     ("benzene", "toluene"): (228.46, -228.46, 0.30),
     ("methanol", "water"): (-253.88, 845.21, 0.30),
     ("ethanol", "water"): (1300.52, 975.49, 0.30),
@@ -133,6 +134,9 @@ NRTL_BINARY_PARAMS = {
     ("methanol", "benzene"): (4148.36, 2377.51, 0.47),
     ("ethanol", "benzene"): (4104.44, 2386.41, 0.47),
     ("chloroform", "methanol"): (-1579.59, 4824.98, 0.30),
+    # Amine scrubbing solvents (Hilliard 2005, Kim et al. 2008, Posey 1996)
+    ("mea", "water"): (-936.0, 4017.0, 0.20),
+    ("mdea", "water"): (-1541.0, 5849.0, 0.20),
 }
 
 
