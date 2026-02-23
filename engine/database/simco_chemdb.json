@@ -1,0 +1,4607 @@
+{
+  "meta": {
+    "name": "SIMCO expanded scrubbing/stripping thermo database",
+    "version": "0.2.0",
+    "generated_utc": "2026-02-22T21:52:19Z",
+    "component_count": 89
+  },
+  "sources": [
+    {
+      "id": "EPA_REFRIG_2017_APP_A",
+      "title": "Chapter 2 - Refrigerated Condensers (EPA). Appendix A: Table A-1 and Table A-2 (Lange's Handbook reprint).",
+      "publisher": "US EPA",
+      "year": 2017,
+      "url": "https://www.epa.gov/sites/production/files/2017-12/documents/refrigeratedcondenserschapter_7thedition_final.pdf"
+    },
+    {
+      "id": "HENRY_SANDER_V5",
+      "title": "Compilation of Henry's law constants (version 5.0.0)",
+      "publisher": "henrys-law.org / Max-Planck Institute for Chemistry (Rolf Sander)",
+      "year": 2023,
+      "doi": "10.5194/acp-23-10901-2023",
+      "url": "https://henrys-law.org/"
+    },
+    {
+      "id": "AKULA_2022_OSTI_1963954",
+      "title": "A modified electrolyte NRTL model... Application to the MEA-H2O-CO2 system (supporting tables for NRTL/eNRTL parameters)",
+      "publisher": "AIChE Journal / OSTI",
+      "year": 2022,
+      "doi": "10.1002/aic.17935",
+      "url": "https://www.osti.gov/servlets/purl/1963954"
+    },
+    {
+      "id": "SIMS2019_KIJ_WATER_CO2",
+      "title": "SIMS 2019 Proceedings paper reporting PR kij value 0.19 for water/CO2 used for dew point calculations",
+      "publisher": "Link\u00f6ping University Electronic Press (SIMS 2019 proceedings)",
+      "year": 2019,
+      "url": "https://ep.liu.se/ecp/170/ecp19170.pdf"
+    },
+    {
+      "id": "SIMCO_INTERNAL_ANTOINE",
+      "title": "SIMCO legacy built-in Antoine coefficients (migrated from engine code)",
+      "publisher": "SIMCO",
+      "year": 2026,
+      "url": "",
+      "notes": "Used to seed missing Antoine coefficients (including gases) while transitioning to DB-driven approach."
+    },
+    {
+      "id": "SIMCO_INTERNAL_CRIT",
+      "title": "SIMCO legacy built-in critical properties (migrated from engine code)",
+      "publisher": "SIMCO",
+      "year": 2026,
+      "url": "",
+      "notes": "Tc and Pc values migrated from legacy constants."
+    },
+    {
+      "id": "SIMCO_INTERNAL_HENRY",
+      "title": "SIMCO legacy built-in Henry constants in water at 25\u00b0C (migrated from engine code)",
+      "publisher": "SIMCO",
+      "year": 2026,
+      "url": "",
+      "notes": "Henry constants stored as H (Pa) with van't Hoff enthalpy parameter."
+    },
+    {
+      "id": "SIMCO_INTERNAL_NRTL",
+      "title": "SIMCO legacy built-in NRTL dg12/dg21 parameter sets (migrated from engine code)",
+      "publisher": "SIMCO",
+      "year": 2026,
+      "url": "",
+      "notes": "Binary NRTL parameters stored as constant dg12,dg21,alpha."
+    }
+  ],
+  "components": [
+    {
+      "id": "ACETONE",
+      "name": "Acetone",
+      "formula": "C\u2083H\u2086O",
+      "mw": 58.08,
+      "identifiers": {
+        "cas": "67-64-1",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 329.81666666666666
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 329.81666666666666,
+            "Tmax_K": 329.81666666666666
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 29.12152
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 126.39949200000001,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 74.56690799999998,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 200.0,
+            "Tmax_K": 2000.0
+          },
+          "parameters": {
+            "A": 7.11714,
+            "B": 1210.595,
+            "C": 229.664
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 508.3333333333333,
+        "Pc_Pa": 4701000.0
+      },
+      "category": "organic",
+      "description": "Ketone solvent; used for model validation."
+    },
+    {
+      "id": "ACETYLENE",
+      "name": "Acetylene",
+      "formula": "",
+      "mw": 26.02,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 189.2611111111111
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 189.2611111111111,
+            "Tmax_K": 189.2611111111111
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 17.003059999999998
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 44.128871999999994,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 143.14999999999998,
+            "Tmax_K": 190.3722222222222
+          },
+          "parameters": {
+            "A": 9.1402,
+            "B": 1232.6,
+            "C": 280.9
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 190.92777777777775,
+            "Tmax_K": 200.92777777777775
+          },
+          "parameters": {
+            "A": 7.0999,
+            "B": 711.0,
+            "C": 253.4
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 308.3333333333333
+      }
+    },
+    {
+      "id": "ACRYLONITRILE",
+      "name": "Acrylonitrile",
+      "formula": "",
+      "mw": 53.06,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 350.3722222222222
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 350.3722222222222,
+            "Tmax_K": 350.3722222222222
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 32.63378
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 63.848699999999994,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 253.14999999999998,
+            "Tmax_K": 413.15
+          },
+          "parameters": {
+            "A": 7.03855,
+            "B": 1232.53,
+            "C": 222.47
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 536.1111111111111
+      }
+    },
+    {
+      "id": "AMP",
+      "name": "2-Amino-2-methyl-1-propanol",
+      "formula": "C4H11NO",
+      "mw": 89.14,
+      "identifiers": {
+        "cas": "124-68-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "ANILINE",
+      "name": "Aniline",
+      "formula": "",
+      "mw": 93.13,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 457.59444444444443
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 457.59444444444443,
+            "Tmax_K": 457.59444444444443
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 42.42624
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 192.048516,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 107.97757200000001,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 375.3722222222222,
+            "Tmax_K": 458.15
+          },
+          "parameters": {
+            "A": 7.3201,
+            "B": 1731.515,
+            "C": 206.049
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 698.8888888888889
+      }
+    },
+    {
+      "id": "AR",
+      "name": "Argon",
+      "formula": "Ar",
+      "mw": 39.948,
+      "identifiers": {
+        "cas": "7440-37-1",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "BENZENE",
+      "name": "Benzene",
+      "formula": "C\u2086H\u2086",
+      "mw": 78.11,
+      "identifiers": {
+        "cas": "71-43-2",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 353.15
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 353.15,
+            "Tmax_K": 353.15
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 30.72646
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 136.11286799999996,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 260.92777777777775,
+            "Tmax_K": 275.92777777777775
+          },
+          "parameters": {
+            "A": 9.1064,
+            "B": 1885.9,
+            "C": 244.2
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 280.92777777777775,
+            "Tmax_K": 375.92777777777775
+          },
+          "parameters": {
+            "A": 6.90565,
+            "B": 1211.033,
+            "C": 220.79
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 562.2222222222222,
+        "Pc_Pa": 4898000.0
+      },
+      "category": "organic",
+      "description": "Aromatic hydrocarbon; used for model validation."
+    },
+    {
+      "id": "BENZONITRILE",
+      "name": "Benzonitrile",
+      "formula": "",
+      "mw": 103.12,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 463.7055555555555
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 463.7055555555555,
+            "Tmax_K": 463.7055555555555
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 45.9385
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 109.191744,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 200.0,
+            "Tmax_K": 2000.0
+          },
+          "parameters": {
+            "A": 6.74631,
+            "B": 1436.72,
+            "C": 181.0
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 699.4444444444445
+      }
+    },
+    {
+      "id": "BMIM_BF4",
+      "name": "1-Butyl-3-methylimidazolium tetrafluoroborate",
+      "formula": "C8H15BF4N2",
+      "mw": 226.02,
+      "identifiers": {
+        "cas": "174501-65-6",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "C2H6",
+      "name": "Ethane",
+      "formula": "C2H6",
+      "mw": 30.07,
+      "identifiers": {
+        "cas": "74-84-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "C3H8",
+      "name": "Propane",
+      "formula": "C3H8",
+      "mw": 44.1,
+      "identifiers": {
+        "cas": "74-98-6",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "CH4",
+      "name": "Methane",
+      "formula": "CH\u2084",
+      "mw": 16.043,
+      "identifiers": {
+        "cas": "74-82-8",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 90.64999999999998,
+            "Tmax_K": 189.95
+          },
+          "parameters": {
+            "A": 6.8646,
+            "B": 443.028,
+            "C": 272.66
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 4130000000.0,
+            "dH_sol_J_mol": -14500.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT",
+        "SIMCO_INTERNAL_HENRY"
+      ],
+      "critical": {
+        "Tc_K": 190.55999999999997,
+        "Pc_Pa": 4599000.0
+      },
+      "category": "carrier_gas",
+      "description": "Primary component of natural gas streams being sweetened."
+    },
+    {
+      "id": "CHLOROETHANE",
+      "name": "Chloroethane",
+      "formula": "",
+      "mw": 64.52,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 285.3722222222222
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 285.3722222222222,
+            "Tmax_K": 285.3722222222222
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 24.72538
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 62.634528,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 217.03888888888886,
+            "Tmax_K": 285.3722222222222
+          },
+          "parameters": {
+            "A": 6.98647,
+            "B": 1030.01,
+            "C": 238.61
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 460.55555555555554
+      }
+    },
+    {
+      "id": "CHLOROETHYLENE",
+      "name": "Chloroethylene",
+      "formula": "",
+      "mw": 0.0,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 208.14999999999998,
+            "Tmax_K": 260.3722222222222
+          },
+          "parameters": {
+            "A": 6.89117,
+            "B": 905.01,
+            "C": 239.48
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ]
+    },
+    {
+      "id": "CHLOROFORM",
+      "name": "Chloroform",
+      "formula": "CHCl\u2083",
+      "mw": 119.39,
+      "identifiers": {
+        "cas": "67-66-3",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 334.81666666666666
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 334.81666666666666,
+            "Tmax_K": 334.81666666666666
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 29.21456
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 65.774628,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 238.14999999999998,
+            "Tmax_K": 334.26111111111106
+          },
+          "parameters": {
+            "A": 6.4934,
+            "B": 929.44,
+            "C": 196.03
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 263.15,
+            "Tmax_K": 333.15
+          },
+          "parameters": {
+            "A": 6.95465,
+            "B": 1170.966,
+            "C": 226.232
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 536.6666666666666,
+        "Pc_Pa": 5472000.0
+      },
+      "category": "organic",
+      "description": "Chlorinated solvent; used for model validation."
+    },
+    {
+      "id": "CHLOROMETHANE",
+      "name": "Chloromethane",
+      "formula": "",
+      "mw": 50.49,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 248.70555555555552
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 248.70555555555552,
+            "Tmax_K": 248.70555555555552
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 21.422459999999997
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 40.821299999999994,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 198.14999999999998,
+            "Tmax_K": 268.15
+          },
+          "parameters": {
+            "A": 7.09349,
+            "B": 948.58,
+            "C": 249.34
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 416.1111111111111
+      }
+    },
+    {
+      "id": "CHOLINE_CHLORIDE",
+      "name": "Choline chloride",
+      "formula": "C5H14ClNO",
+      "mw": 139.62,
+      "identifiers": {
+        "cas": "67-48-1",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "CO",
+      "name": "Carbon monoxide",
+      "formula": "CO",
+      "mw": 28.01,
+      "identifiers": {
+        "cas": "630-08-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 5800000000.0,
+            "dH_sol_J_mol": -11000.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_HENRY"
+      ]
+    },
+    {
+      "id": "CO2",
+      "name": "Carbon dioxide",
+      "formula": "CO\u2082",
+      "mw": 44.01,
+      "identifiers": {
+        "cas": "124-38-9",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Henry_Hcp",
+          "model": "Sander_Hs_cp",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Hs_cp_mol_m3_Pa": 0.00034,
+            "dlnH_d1overT_K": 2300
+          },
+          "units": {
+            "Hs_cp": "mol/(m^3\u00b7Pa)"
+          },
+          "source_ref": "HENRY_SANDER_V5"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 154.24999999999997,
+            "Tmax_K": 195.84999999999997
+          },
+          "parameters": {
+            "A": 9.6874,
+            "B": 1301.679,
+            "C": 269.656
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 161000000.0,
+            "dH_sol_J_mol": -19400.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "HENRY_SANDER_V5",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT",
+        "SIMCO_INTERNAL_HENRY"
+      ],
+      "critical": {
+        "Tc_K": 304.13,
+        "Pc_Pa": 7377000.0
+      },
+      "category": "acid_gas",
+      "description": "Primary target in post-combustion capture and natural gas sweetening."
+    },
+    {
+      "id": "COS",
+      "name": "Carbonyl sulfide",
+      "formula": "COS",
+      "mw": 60.075,
+      "identifiers": {
+        "cas": "463-58-1",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "CS2",
+      "name": "Carbon disulfide",
+      "formula": "CS2",
+      "mw": 76.14,
+      "identifiers": {
+        "cas": "75-15-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "CYANIC_ACID",
+      "name": "Cyanic acid",
+      "formula": "",
+      "mw": 0.0,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 197.03888888888886,
+            "Tmax_K": 267.0388888888889
+          },
+          "parameters": {
+            "A": 7.56859,
+            "B": 1251.86,
+            "C": 243.79
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ]
+    },
+    {
+      "id": "CYCLOBUTANE",
+      "name": "Cyclobutane",
+      "formula": "",
+      "mw": 56.1,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 285.92777777777775
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 285.92777777777775,
+            "Tmax_K": 285.92777777777775
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 24.213659999999997
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 72.264168,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 213.14999999999998,
+            "Tmax_K": 285.3722222222222
+          },
+          "parameters": {
+            "A": 6.91631,
+            "B": 1054.54,
+            "C": 241.37
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 460.0
+      }
+    },
+    {
+      "id": "CYCLOHEXANE",
+      "name": "Cyclohexane",
+      "formula": "",
+      "mw": 84.16,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 353.7055555555555
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 353.7055555555555,
+            "Tmax_K": 353.7055555555555
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 30.02866
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 155.03720400000003,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 106.386588,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 293.15,
+            "Tmax_K": 354.26111111111106
+          },
+          "parameters": {
+            "A": 6.8413,
+            "B": 1201.53,
+            "C": 222.65
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 553.3333333333334
+      }
+    },
+    {
+      "id": "CYCLOPENTANE",
+      "name": "Cyclopentane",
+      "formula": "",
+      "mw": 70.13,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 322.59444444444443
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 322.59444444444443,
+            "Tmax_K": 322.59444444444443
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 27.330499999999997
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 128.99530799999997,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 83.06611199999999,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 233.14999999999998,
+            "Tmax_K": 345.3722222222222
+          },
+          "parameters": {
+            "A": 6.88676,
+            "B": 1124.162,
+            "C": 231.36
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 511.6666666666667
+      }
+    },
+    {
+      "id": "CYCLOPROPANE",
+      "name": "Cyclopropane",
+      "formula": "",
+      "mw": 42.08,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 240.3722222222222
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 240.3722222222222,
+            "Tmax_K": 240.3722222222222
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 20.1199
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 55.642571999999994,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 183.14999999999998,
+            "Tmax_K": 240.92777777777775
+          },
+          "parameters": {
+            "A": 6.88788,
+            "B": 856.01,
+            "C": 246.5
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 397.77777777777777
+      }
+    },
+    {
+      "id": "CaCO3",
+      "name": "Calcium carbonate",
+      "formula": "CaCO3",
+      "mw": 100.09,
+      "identifiers": {
+        "cas": "471-34-1",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "CaOH2",
+      "name": "Calcium hydroxide",
+      "formula": "Ca(OH)2",
+      "mw": 74.09,
+      "identifiers": {
+        "cas": "1305-62-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "Cl2",
+      "name": "Chlorine",
+      "formula": "Cl2",
+      "mw": 70.906,
+      "identifiers": {
+        "cas": "7782-50-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 6250000.0,
+            "dH_sol_J_mol": -18900.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_HENRY"
+      ]
+    },
+    {
+      "id": "DEA",
+      "name": "Diethanolamine",
+      "formula": "C4H11NO2",
+      "mw": 105.14,
+      "identifiers": {
+        "cas": "111-42-2",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "DGA",
+      "name": "Diglycolamine",
+      "formula": "C4H11NO2",
+      "mw": 105.14,
+      "identifiers": {
+        "cas": "929-06-6",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "DIETHYLAMINE",
+      "name": "Diethylamine",
+      "formula": "",
+      "mw": 0.0,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 304.26111111111106,
+            "Tmax_K": 334.26111111111106
+          },
+          "parameters": {
+            "A": 5.8016,
+            "B": 583.3,
+            "C": 144.1
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ]
+    },
+    {
+      "id": "DIETHYL_ETHER",
+      "name": "Diethyl ether",
+      "formula": "",
+      "mw": 74.12,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 307.59444444444443
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 307.59444444444443,
+            "Tmax_K": 307.59444444444443
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 26.516399999999997
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 172.74736799999997,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 119.61687599999998,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 212.03888888888886,
+            "Tmax_K": 293.15
+          },
+          "parameters": {
+            "A": 6.92032,
+            "B": 1064.07,
+            "C": 228.8
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 466.6666666666667
+      }
+    },
+    {
+      "id": "DIMETHYLAMINE",
+      "name": "Dimethylamine",
+      "formula": "",
+      "mw": 45.09,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 279.81666666666666
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 279.81666666666666,
+            "Tmax_K": 279.81666666666666
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 26.42336
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 70.75692,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 200.92777777777775,
+            "Tmax_K": 279.81666666666666
+          },
+          "parameters": {
+            "A": 7.08212,
+            "B": 960.242,
+            "C": 221.67
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 437.22222222222223
+      }
+    },
+    {
+      "id": "DIOXANE_1_4",
+      "name": "1,4-Dioxane",
+      "formula": "",
+      "mw": 0.0,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 293.15,
+            "Tmax_K": 378.15
+          },
+          "parameters": {
+            "A": 7.43158,
+            "B": 1554.68,
+            "C": 240.34
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ]
+    },
+    {
+      "id": "DIPA",
+      "name": "Diisopropanolamine",
+      "formula": "C6H15NO2",
+      "mw": 133.19,
+      "identifiers": {
+        "cas": "110-97-4",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "DMC",
+      "name": "Dimethyl carbonate",
+      "formula": "C3H6O3",
+      "mw": 90.08,
+      "identifiers": {
+        "cas": "616-38-6",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "DMSO",
+      "name": "Dimethyl sulfoxide",
+      "formula": "C2H6OS",
+      "mw": 78.13,
+      "identifiers": {
+        "cas": "67-68-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "EMIM_OAC",
+      "name": "1-Ethyl-3-methylimidazolium acetate",
+      "formula": "C8H14N2O2",
+      "mw": 170.21,
+      "identifiers": {
+        "cas": "143314-17-4",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "ETHYLBENZENE",
+      "name": "Ethylbenzene",
+      "formula": "",
+      "mw": 106.17,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 409.26111111111106
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 409.26111111111106,
+            "Tmax_K": 409.26111111111106
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 35.634319999999995
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 128.492892,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 299.26111111111106,
+            "Tmax_K": 437.0388888888889
+          },
+          "parameters": {
+            "A": 6.95719,
+            "B": 1424.255,
+            "C": 213.21
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 617.2222222222222
+      }
+    },
+    {
+      "id": "ETHYLENE_OXIDE",
+      "name": "Ethylene oxide",
+      "formula": "",
+      "mw": 44.05,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 283.7055555555555
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 283.7055555555555,
+            "Tmax_K": 283.7055555555555
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 25.51622
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 47.93885999999999,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 224.2611111111111,
+            "Tmax_K": 285.3722222222222
+          },
+          "parameters": {
+            "A": 7.12843,
+            "B": 1054.54,
+            "C": 237.76
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 468.8888888888889
+      }
+    },
+    {
+      "id": "ETOH",
+      "name": "Ethanol",
+      "formula": "C\u2082H\u2085OH",
+      "mw": 46.07,
+      "identifiers": {
+        "cas": "64-17-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 293.15,
+            "Tmax_K": 366.15
+          },
+          "parameters": {
+            "A": 8.1122,
+            "B": 1592.864,
+            "C": 226.184
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 514.71,
+        "Pc_Pa": 6268000.0
+      },
+      "category": "organic",
+      "description": "Common organic; used for model validation."
+    },
+    {
+      "id": "GLYCEROL",
+      "name": "Glycerol",
+      "formula": "C3H8O3",
+      "mw": 92.09,
+      "identifiers": {
+        "cas": "56-81-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "H2",
+      "name": "Hydrogen",
+      "formula": "H2",
+      "mw": 2.016,
+      "identifiers": {
+        "cas": "1333-74-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "H2O",
+      "name": "Water",
+      "formula": "H\u2082O",
+      "mw": 18.015,
+      "identifiers": {
+        "cas": "7732-18-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 274.15,
+            "Tmax_K": 373.15
+          },
+          "parameters": {
+            "A": 8.07131,
+            "B": 1730.63,
+            "C": 233.426
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 333.15,
+            "Tmax_K": 423.15
+          },
+          "parameters": {
+            "A": 8.14019,
+            "B": 1810.94,
+            "C": 244.485
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 647.0999999999999,
+        "Pc_Pa": 22064000.0
+      },
+      "category": "physical_solvent",
+      "description": "Universal diluent for amine solutions; also used in SO\u2082/HCl scrubbing."
+    },
+    {
+      "id": "H2O2",
+      "name": "Hydrogen peroxide",
+      "formula": "H2O2",
+      "mw": 34.014,
+      "identifiers": {
+        "cas": "7722-84-1",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "H2S",
+      "name": "Hydrogen sulfide",
+      "formula": "H\u2082S",
+      "mw": 34.08,
+      "identifiers": {
+        "cas": "7783-06-4",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Henry_Hcp",
+          "model": "Sander_Hs_cp",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Hs_cp_mol_m3_Pa": 0.001,
+            "dlnH_d1overT_K": 2100
+          },
+          "units": {
+            "Hs_cp": "mol/(m^3\u00b7Pa)"
+          },
+          "source_ref": "HENRY_SANDER_V5"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 190.14999999999998,
+            "Tmax_K": 230.14999999999998
+          },
+          "parameters": {
+            "A": 6.9939,
+            "B": 768.132,
+            "C": 247.09
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 55300000.0,
+            "dH_sol_J_mol": -18000.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "HENRY_SANDER_V5",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT",
+        "SIMCO_INTERNAL_HENRY"
+      ],
+      "critical": {
+        "Tc_K": 373.2,
+        "Pc_Pa": 8963000.0
+      },
+      "category": "acid_gas",
+      "description": "Toxic acid gas removed in gas sweetening (Claus process feed)."
+    },
+    {
+      "id": "HBr",
+      "name": "Hydrogen bromide",
+      "formula": "HBr",
+      "mw": 80.912,
+      "identifiers": {
+        "cas": "10035-10-6",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "HCN",
+      "name": "Hydrogen cyanide",
+      "formula": "HCN",
+      "mw": 27.026,
+      "identifiers": {
+        "cas": "74-90-8",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "HCl",
+      "name": "Hydrogen chloride",
+      "formula": "HCl",
+      "mw": 36.46,
+      "identifiers": {
+        "cas": "7647-01-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 137.14999999999998,
+            "Tmax_K": 200.14999999999998
+          },
+          "parameters": {
+            "A": 7.1676,
+            "B": 744.489,
+            "C": 258.7
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 324.59999999999997,
+        "Pc_Pa": 8309999.999999999
+      },
+      "category": "acid_gas",
+      "description": "Strong acid gas from waste incineration and chlorinated feedstocks."
+    },
+    {
+      "id": "HF",
+      "name": "Hydrogen fluoride",
+      "formula": "HF",
+      "mw": 20.01,
+      "identifiers": {
+        "cas": "7664-39-3",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "IPA",
+      "name": "Isopropanol",
+      "formula": "C3H8O",
+      "mw": 60.1,
+      "identifiers": {
+        "cas": "67-63-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "K2CO3",
+      "name": "Potassium carbonate",
+      "formula": "K2CO3",
+      "mw": 138.21,
+      "identifiers": {
+        "cas": "584-08-7",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "KOH",
+      "name": "Potassium hydroxide",
+      "formula": "KOH",
+      "mw": 56.11,
+      "identifiers": {
+        "cas": "1310-58-3",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "MDEA",
+      "name": "Methyldiethanolamine",
+      "formula": "C\u2085H\u2081\u2083NO\u2082",
+      "mw": 119.16,
+      "identifiers": {
+        "cas": "105-59-9",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 333.15,
+            "Tmax_K": 533.15
+          },
+          "parameters": {
+            "A": 7.1773,
+            "B": 1835.461,
+            "C": 180.0
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 678.0,
+        "Pc_Pa": 3870000.0000000005
+      },
+      "category": "amine_solvent",
+      "description": "Tertiary amine, selective for H\u2082S over CO\u2082 in gas sweetening."
+    },
+    {
+      "id": "MEA",
+      "name": "Monoethanolamine",
+      "formula": "C\u2082H\u2087NO",
+      "mw": 61.08,
+      "identifiers": {
+        "cas": "141-43-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 338.65,
+            "Tmax_K": 444.15
+          },
+          "parameters": {
+            "A": 7.1676,
+            "B": 1408.873,
+            "C": 157.057
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 678.2,
+        "Pc_Pa": 4450000.0
+      },
+      "category": "amine_solvent",
+      "description": "Primary amine, benchmark solvent for post-combustion CO\u2082 capture."
+    },
+    {
+      "id": "MEK",
+      "name": "2-Butanone (MEK)",
+      "formula": "C4H8O",
+      "mw": 72.11,
+      "identifiers": {
+        "cas": "78-93-3",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "MEOH",
+      "name": "Methanol",
+      "formula": "CH\u2083OH",
+      "mw": 32.04,
+      "identifiers": {
+        "cas": "67-56-1",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 337.59444444444443
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 337.59444444444443,
+            "Tmax_K": 337.59444444444443
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 35.2389
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 81.26578799999999,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 44.128871999999994,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 259.26111111111106,
+            "Tmax_K": 338.15
+          },
+          "parameters": {
+            "A": 7.8975,
+            "B": 1474.08,
+            "C": 229.13
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 337.0388888888889,
+            "Tmax_K": 383.15
+          },
+          "parameters": {
+            "A": 7.97328,
+            "B": 1515.14,
+            "C": 232.85
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 263.15,
+            "Tmax_K": 357.15
+          },
+          "parameters": {
+            "A": 8.08097,
+            "B": 1582.271,
+            "C": 239.726
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 512.7777777777778,
+        "Pc_Pa": 8084000.0
+      },
+      "category": "physical_solvent",
+      "description": "Physical solvent (Rectisol process) for CO\u2082 and H\u2082S at low temperatures."
+    },
+    {
+      "id": "M_XYLENE",
+      "name": "m-Xylene",
+      "formula": "",
+      "mw": 106.17,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 412.0388888888889
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 412.0388888888889,
+            "Tmax_K": 412.0388888888889
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 35.72736
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 183.46557599999997,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 127.69739999999999,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 300.92777777777775,
+            "Tmax_K": 439.26111111111106
+          },
+          "parameters": {
+            "A": 7.00908,
+            "B": 1462.266,
+            "C": 215.11
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 617.2222222222222
+      }
+    },
+    {
+      "id": "N2",
+      "name": "Nitrogen",
+      "formula": "N\u2082",
+      "mw": 28.014,
+      "identifiers": {
+        "cas": "7727-37-9",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 54.14999999999998,
+            "Tmax_K": 90.14999999999998
+          },
+          "parameters": {
+            "A": 6.4945,
+            "B": 255.678,
+            "C": 266.55
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 8650000000.0,
+            "dH_sol_J_mol": -10400.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT",
+        "SIMCO_INTERNAL_HENRY"
+      ],
+      "critical": {
+        "Tc_K": 126.18999999999997,
+        "Pc_Pa": 3396000.0
+      },
+      "category": "carrier_gas",
+      "description": "Major component of flue gas (~79%% of air)."
+    },
+    {
+      "id": "N2O",
+      "name": "Nitrous oxide",
+      "formula": "N2O",
+      "mw": 44.01,
+      "identifiers": {
+        "cas": "10024-97-2",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "NH3",
+      "name": "Ammonia",
+      "formula": "NH\u2083",
+      "mw": 17.031,
+      "identifiers": {
+        "cas": "7664-41-7",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Henry_Hcp",
+          "model": "Sander_Hs_cp",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Hs_cp_mol_m3_Pa": 0.59,
+            "dlnH_d1overT_K": 4200
+          },
+          "units": {
+            "Hs_cp": "mol/(m^3\u00b7Pa)"
+          },
+          "source_ref": "HENRY_SANDER_V5"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 179.14999999999998,
+            "Tmax_K": 261.15
+          },
+          "parameters": {
+            "A": 7.3605,
+            "B": 926.133,
+            "C": 240.17
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 56900.0,
+            "dH_sol_J_mol": -34200.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "HENRY_SANDER_V5",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT",
+        "SIMCO_INTERNAL_HENRY"
+      ],
+      "critical": {
+        "Tc_K": 405.59999999999997,
+        "Pc_Pa": 11280000.0
+      },
+      "category": "acid_gas",
+      "description": "Basic gas scrubbed from fertilizer off-gas, SCR slip, and waste streams."
+    },
+    {
+      "id": "NMP",
+      "name": "N-Methyl-2-pyrrolidone",
+      "formula": "C5H9NO",
+      "mw": 99.13,
+      "identifiers": {
+        "cas": "872-50-4",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "NO",
+      "name": "Nitric oxide",
+      "formula": "NO",
+      "mw": 30.01,
+      "identifiers": {
+        "cas": "10102-43-9",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 95.14999999999998,
+            "Tmax_K": 140.14999999999998
+          },
+          "parameters": {
+            "A": 8.743,
+            "B": 682.937,
+            "C": 268.27
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 2690000000.0,
+            "dH_sol_J_mol": -12000.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT",
+        "SIMCO_INTERNAL_HENRY"
+      ],
+      "critical": {
+        "Tc_K": 179.99999999999997,
+        "Pc_Pa": 6480000.0
+      },
+      "category": "acid_gas",
+      "description": "Primary NOx component in combustion flue gas."
+    },
+    {
+      "id": "NO2",
+      "name": "Nitrogen dioxide",
+      "formula": "NO\u2082",
+      "mw": 46.01,
+      "identifiers": {
+        "cas": "10102-44-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 230.14999999999998,
+            "Tmax_K": 320.15
+          },
+          "parameters": {
+            "A": 8.9171,
+            "B": 1798.539,
+            "C": 276.8
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 431.4,
+        "Pc_Pa": 10130000.0
+      },
+      "category": "acid_gas",
+      "description": "Secondary NOx component; more soluble and reactive than NO."
+    },
+    {
+      "id": "N_BUTANE",
+      "name": "n-Butane",
+      "formula": "",
+      "mw": 58.12,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 272.59444444444443
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 272.59444444444443,
+            "Tmax_K": 272.59444444444443
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 22.42264
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 97.59430799999998,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 195.92777777777775,
+            "Tmax_K": 292.0388888888889
+          },
+          "parameters": {
+            "A": 6.80898,
+            "B": 935.86,
+            "C": 238.73
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 425.0
+      }
+    },
+    {
+      "id": "N_HEPTANE",
+      "name": "Heptane",
+      "formula": "C\u2087H\u2081\u2086",
+      "mw": 100.12,
+      "identifiers": {
+        "cas": "142-82-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 371.4833333333333
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 371.4833333333333,
+            "Tmax_K": 371.4833333333333
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 31.819679999999998
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 225.082368,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 166.13222399999998,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 270.92777777777775,
+            "Tmax_K": 397.0388888888889
+          },
+          "parameters": {
+            "A": 6.89677,
+            "B": 1264.9,
+            "C": 216.54
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 271.15,
+            "Tmax_K": 400.15
+          },
+          "parameters": {
+            "A": 6.89385,
+            "B": 1264.37,
+            "C": 216.636
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 540.0,
+        "Pc_Pa": 2740000.0
+      },
+      "category": "organic",
+      "description": "Alkane; used for model validation."
+    },
+    {
+      "id": "N_HEXANE",
+      "name": "Hexane",
+      "formula": "C\u2086H\u2081\u2084",
+      "mw": 86.18,
+      "identifiers": {
+        "cas": "110-54-3",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 342.0388888888889
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 342.0388888888889,
+            "Tmax_K": 342.0388888888889
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 28.93544
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 195.774768,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 143.230428,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 248.14999999999998,
+            "Tmax_K": 365.3722222222222
+          },
+          "parameters": {
+            "A": 6.87601,
+            "B": 1171.17,
+            "C": 224.41
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 248.14999999999998,
+            "Tmax_K": 365.15
+          },
+          "parameters": {
+            "A": 6.87776,
+            "B": 1171.53,
+            "C": 224.366
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 507.77777777777777,
+        "Pc_Pa": 3025000.0
+      },
+      "category": "organic",
+      "description": "Alkane; used for model validation."
+    },
+    {
+      "id": "N_OCTANE",
+      "name": "Octane",
+      "formula": "",
+      "mw": 114.23,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 398.7055555555555
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 398.7055555555555,
+            "Tmax_K": 398.7055555555555
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 34.4248
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 189.075888,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 292.0388888888889,
+            "Tmax_K": 425.3722222222222
+          },
+          "parameters": {
+            "A": 6.91868,
+            "B": 1351.99,
+            "C": 209.15
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 568.8888888888889
+      }
+    },
+    {
+      "id": "N_PENTANE",
+      "name": "Pentane",
+      "formula": "",
+      "mw": 72.15,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 309.26111111111106
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 309.26111111111106,
+            "Tmax_K": 309.26111111111106
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 25.818599999999996
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 120.28676399999999,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 223.14999999999998,
+            "Tmax_K": 330.92777777777775
+          },
+          "parameters": {
+            "A": 6.85296,
+            "B": 1064.84,
+            "C": 233.01
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 469.44444444444446
+      }
+    },
+    {
+      "id": "Na2CO3",
+      "name": "Sodium carbonate",
+      "formula": "Na2CO3",
+      "mw": 105.99,
+      "identifiers": {
+        "cas": "497-19-8",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "Na2SO3",
+      "name": "Sodium sulfite",
+      "formula": "Na2SO3",
+      "mw": 126.04,
+      "identifiers": {
+        "cas": "7757-83-7",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "NaClO",
+      "name": "Sodium hypochlorite",
+      "formula": "NaClO",
+      "mw": 74.44,
+      "identifiers": {
+        "cas": "7681-52-9",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "NaHSO3",
+      "name": "Sodium bisulfite",
+      "formula": "NaHSO3",
+      "mw": 104.06,
+      "identifiers": {
+        "cas": "7631-90-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "NaOH",
+      "name": "Sodium hydroxide",
+      "formula": "NaOH",
+      "mw": 40.0,
+      "identifiers": {
+        "cas": "1310-73-2",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "O2",
+      "name": "Oxygen",
+      "formula": "O\u2082",
+      "mw": 31.998,
+      "identifiers": {
+        "cas": "7782-44-7",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 63.14999999999998,
+            "Tmax_K": 100.14999999999998
+          },
+          "parameters": {
+            "A": 6.6914,
+            "B": 319.011,
+            "C": 266.7
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 4260000000.0,
+            "dH_sol_J_mol": -14200.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT",
+        "SIMCO_INTERNAL_HENRY"
+      ],
+      "critical": {
+        "Tc_K": 154.57999999999998,
+        "Pc_Pa": 5043000.0
+      },
+      "category": "carrier_gas",
+      "description": "Present in flue gas; causes amine degradation in absorbers."
+    },
+    {
+      "id": "O3",
+      "name": "Ozone",
+      "formula": "O3",
+      "mw": 48.0,
+      "identifiers": {
+        "cas": "10028-15-6",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "O_XYLENE",
+      "name": "o-Xylene",
+      "formula": "",
+      "mw": 106.17,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 417.59444444444443
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 417.59444444444443,
+            "Tmax_K": 417.59444444444443
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 36.93688
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 186.270732,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 133.391448,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 305.3722222222222,
+            "Tmax_K": 445.3722222222222
+          },
+          "parameters": {
+            "A": 6.99891,
+            "B": 1474.679,
+            "C": 213.69
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 630.5555555555555
+      }
+    },
+    {
+      "id": "PC",
+      "name": "Propylene carbonate",
+      "formula": "C4H6O3",
+      "mw": 102.09,
+      "identifiers": {
+        "cas": "108-32-7",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "PEGDME",
+      "name": "Dimethyl ether of polyethylene glycol (DEPG/Selexol family)",
+      "formula": "(C2H4O)n",
+      "mw": 0.0,
+      "identifiers": {
+        "cas": "24991-55-7",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "PZ",
+      "name": "Piperazine",
+      "formula": "C4H10N2",
+      "mw": 86.14,
+      "identifiers": {
+        "cas": "110-85-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "P_XYLENE",
+      "name": "p-Xylene",
+      "formula": "",
+      "mw": 106.17,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 411.48333333333335
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 411.48333333333335,
+            "Tmax_K": 411.48333333333335
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 35.72736
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 126.98564400000001,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 300.3722222222222,
+            "Tmax_K": 439.26111111111106
+          },
+          "parameters": {
+            "A": 6.99052,
+            "B": 1453.43,
+            "C": 215.31
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ],
+      "critical": {
+        "Tc_K": 616.1111111111111
+      }
+    },
+    {
+      "id": "SO2",
+      "name": "Sulfur dioxide",
+      "formula": "SO\u2082",
+      "mw": 64.07,
+      "identifiers": {
+        "cas": "7446-09-5",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Henry_Hcp",
+          "model": "Sander_Hs_cp",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Hs_cp_mol_m3_Pa": 0.013,
+            "dlnH_d1overT_K": 2900
+          },
+          "units": {
+            "Hs_cp": "mol/(m^3\u00b7Pa)"
+          },
+          "source_ref": "HENRY_SANDER_V5"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 195.14999999999998,
+            "Tmax_K": 280.15
+          },
+          "parameters": {
+            "A": 7.2823,
+            "B": 999.898,
+            "C": 237.18
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        },
+        {
+          "property": "Henry_Hpa",
+          "model": "constant_vanthoff",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "H_pa": 788000.0,
+            "dH_sol_J_mol": -24800.0,
+            "T_ref_K": 298.15,
+            "solvent": "water"
+          },
+          "units": {
+            "H": "Pa"
+          },
+          "source_ref": "SIMCO_INTERNAL_HENRY"
+        }
+      ],
+      "sources": [
+        "HENRY_SANDER_V5",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT",
+        "SIMCO_INTERNAL_HENRY"
+      ],
+      "critical": {
+        "Tc_K": 430.64,
+        "Pc_Pa": 7884000.0
+      },
+      "category": "acid_gas",
+      "description": "Flue gas desulfurization (FGD) target from power plants and smelters."
+    },
+    {
+      "id": "SO3",
+      "name": "Sulfur trioxide",
+      "formula": "SO3",
+      "mw": 80.06,
+      "identifiers": {
+        "cas": "7446-11-9",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "SULFOLANE",
+      "name": "Sulfolane",
+      "formula": "C4H8O2S",
+      "mw": 120.17,
+      "identifiers": {
+        "cas": "126-33-0",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "TEA",
+      "name": "Triethanolamine",
+      "formula": "C6H15NO3",
+      "mw": 149.19,
+      "identifiers": {
+        "cas": "102-71-6",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "TOLUENE",
+      "name": "Toluene",
+      "formula": "C\u2087H\u2088",
+      "mw": 92.14,
+      "identifiers": {
+        "cas": "108-88-3",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Tb",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 0.0,
+            "Tmax_K": 1000000000.0
+          },
+          "parameters": {
+            "Tb_K": 383.7055555555555
+          },
+          "units": {
+            "T": "K"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Hvap",
+          "model": "constant_at_Tb",
+          "validity": {
+            "Tmin_K": 383.7055555555555,
+            "Tmax_K": 383.7055555555555
+          },
+          "parameters": {
+            "Hvap_kJ_mol": 33.23854
+          },
+          "units": {
+            "Hvap": "kJ/mol"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 157.13060399999998,
+            "phase": "liquid"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Cp",
+          "model": "constant",
+          "validity": {
+            "Tmin_K": 298.15,
+            "Tmax_K": 298.15
+          },
+          "parameters": {
+            "Cp_J_molK": 103.665168,
+            "phase": "gas"
+          },
+          "units": {
+            "Cp": "J/(mol\u00b7K)"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 279.26111111111106,
+            "Tmax_K": 410.3722222222222
+          },
+          "parameters": {
+            "A": 6.95464,
+            "B": 1344.8,
+            "C": 219.48
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        },
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 279.15,
+            "Tmax_K": 410.15
+          },
+          "parameters": {
+            "A": 6.95087,
+            "B": 1342.31,
+            "C": 219.187
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "SIMCO_INTERNAL_ANTOINE"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A",
+        "SIMCO_INTERNAL_ANTOINE",
+        "SIMCO_INTERNAL_CRIT"
+      ],
+      "critical": {
+        "Tc_K": 591.6666666666666,
+        "Pc_Pa": 4106000.0
+      },
+      "category": "organic",
+      "description": "Aromatic hydrocarbon; used for model validation."
+    },
+    {
+      "id": "UREA",
+      "name": "Urea",
+      "formula": "CH4N2O",
+      "mw": 60.06,
+      "identifiers": {
+        "cas": "57-13-6",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [],
+      "sources": []
+    },
+    {
+      "id": "VINYL_ACETATE",
+      "name": "Vinyl acetate",
+      "formula": "",
+      "mw": 0.0,
+      "identifiers": {
+        "cas": "",
+        "inchi": "",
+        "smiles": ""
+      },
+      "correlations": [
+        {
+          "property": "Psat",
+          "model": "Antoine_log10_PmmHg_TdegC",
+          "validity": {
+            "Tmin_K": 295.3722222222222,
+            "Tmax_K": 345.3722222222222
+          },
+          "parameters": {
+            "A": 7.2101,
+            "B": 1296.13,
+            "C": 226.66
+          },
+          "units": {
+            "P": "mmHg",
+            "T": "degC"
+          },
+          "source_ref": "EPA_REFRIG_2017_APP_A"
+        }
+      ],
+      "sources": [
+        "EPA_REFRIG_2017_APP_A"
+      ]
+    }
+  ],
+  "binary_interactions": [
+    {
+      "model_family": "PR",
+      "components": [
+        "H2O",
+        "CO2"
+      ],
+      "form": "kij_const",
+      "parameters": {
+        "kij": 0.19
+      },
+      "validity": {
+        "Tmin_K": 273.15,
+        "Tmax_K": 373.15
+      },
+      "source_ref": "SIMS2019_KIJ_WATER_CO2"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "MEA",
+        "H2O"
+      ],
+      "form": "tau_AplusBoverT",
+      "parameters": {
+        "MEA_to_H2O": {
+          "A": 1.5201,
+          "B": -910.3
+        },
+        "H2O_to_MEA": {
+          "A": 0.1559,
+          "B": 110.8
+        },
+        "alpha": 0.2
+      },
+      "validity": {
+        "Tmin_K": 273.15,
+        "Tmax_K": 423.15
+      },
+      "source_ref": "AKULA_2022_OSTI_1963954"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "benzene",
+        "toluene"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": 228.46,
+        "dg21": -228.46,
+        "alpha": 0.3
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "methanol",
+        "water"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": -253.88,
+        "dg21": 845.21,
+        "alpha": 0.3
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "ethanol",
+        "water"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": 1300.52,
+        "dg21": 975.49,
+        "alpha": 0.3
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "acetone",
+        "water"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": 631.05,
+        "dg21": 1197.41,
+        "alpha": 0.3
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "acetone",
+        "methanol"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": 184.7,
+        "dg21": 222.64,
+        "alpha": 0.3
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "methanol",
+        "benzene"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": 4148.36,
+        "dg21": 2377.51,
+        "alpha": 0.47
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "ethanol",
+        "benzene"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": 4104.44,
+        "dg21": 2386.41,
+        "alpha": 0.47
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "chloroform",
+        "methanol"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": -1579.59,
+        "dg21": 4824.98,
+        "alpha": 0.3
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "mea",
+        "water"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": -936.0,
+        "dg21": 4017.0,
+        "alpha": 0.2
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    },
+    {
+      "model_family": "NRTL",
+      "components": [
+        "mdea",
+        "water"
+      ],
+      "form": "dg_const",
+      "parameters": {
+        "dg12": -1541.0,
+        "dg21": 5849.0,
+        "alpha": 0.2
+      },
+      "validity": {
+        "Tmin_K": 250.0,
+        "Tmax_K": 500.0
+      },
+      "source_ref": "SIMCO_INTERNAL_NRTL"
+    }
+  ],
+  "packings": [
+    {
+      "name": "Raschig Ring 25mm",
+      "type": "random",
+      "material": "ceramic",
+      "nominal_size_mm": 25,
+      "specific_area": 190,
+      "void_fraction": 0.68,
+      "packing_factor": 580,
+      "hetp": 0.6,
+      "source": "Perry's"
+    },
+    {
+      "name": "Raschig Ring 50mm",
+      "type": "random",
+      "material": "ceramic",
+      "nominal_size_mm": 50,
+      "specific_area": 95,
+      "void_fraction": 0.74,
+      "packing_factor": 155,
+      "hetp": 0.9,
+      "source": "Perry's"
+    },
+    {
+      "name": "Pall Ring 25mm",
+      "type": "random",
+      "material": "metal",
+      "nominal_size_mm": 25,
+      "specific_area": 205,
+      "void_fraction": 0.94,
+      "packing_factor": 157,
+      "hetp": 0.45,
+      "source": "Perry's"
+    },
+    {
+      "name": "Pall Ring 50mm",
+      "type": "random",
+      "material": "metal",
+      "nominal_size_mm": 50,
+      "specific_area": 105,
+      "void_fraction": 0.96,
+      "packing_factor": 66,
+      "hetp": 0.65,
+      "source": "Perry's"
+    },
+    {
+      "name": "IMTP 25",
+      "type": "random",
+      "material": "metal",
+      "nominal_size_mm": 25,
+      "specific_area": 230,
+      "void_fraction": 0.97,
+      "packing_factor": 135,
+      "hetp": 0.4,
+      "source": "Koch-Glitsch"
+    },
+    {
+      "name": "IMTP 50",
+      "type": "random",
+      "material": "metal",
+      "nominal_size_mm": 50,
+      "specific_area": 108,
+      "void_fraction": 0.98,
+      "packing_factor": 57,
+      "hetp": 0.6,
+      "source": "Koch-Glitsch"
+    },
+    {
+      "name": "Mellapak 250Y",
+      "type": "structured",
+      "material": "metal",
+      "nominal_size_mm": null,
+      "specific_area": 250,
+      "void_fraction": 0.98,
+      "packing_factor": 66,
+      "hetp": 0.35,
+      "source": "Sulzer"
+    },
+    {
+      "name": "Mellapak 500Y",
+      "type": "structured",
+      "material": "metal",
+      "nominal_size_mm": null,
+      "specific_area": 500,
+      "void_fraction": 0.98,
+      "packing_factor": 112,
+      "hetp": 0.2,
+      "source": "Sulzer"
+    },
+    {
+      "name": "Flexipac 1Y",
+      "type": "structured",
+      "material": "metal",
+      "nominal_size_mm": null,
+      "specific_area": 410,
+      "void_fraction": 0.97,
+      "packing_factor": 98,
+      "hetp": 0.25,
+      "source": "Koch-Glitsch"
+    },
+    {
+      "name": "Flexipac 2Y",
+      "type": "structured",
+      "material": "metal",
+      "nominal_size_mm": null,
+      "specific_area": 225,
+      "void_fraction": 0.98,
+      "packing_factor": 59,
+      "hetp": 0.4,
+      "source": "Koch-Glitsch"
+    },
+    {
+      "name": "Berl Saddle 25mm",
+      "type": "random",
+      "material": "ceramic",
+      "nominal_size_mm": 25,
+      "specific_area": 250,
+      "void_fraction": 0.68,
+      "packing_factor": 360,
+      "hetp": 0.55,
+      "source": "Perry's"
+    },
+    {
+      "name": "Intalox Saddle 25mm",
+      "type": "random",
+      "material": "ceramic",
+      "nominal_size_mm": 25,
+      "specific_area": 256,
+      "void_fraction": 0.73,
+      "packing_factor": 302,
+      "hetp": 0.5,
+      "source": "Perry's"
+    }
+  ]
+}

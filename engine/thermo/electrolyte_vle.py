@@ -28,7 +28,7 @@ from typing import Dict, List, Optional, Tuple
 from engine.thermo.antoine import (
     antoine_pressure,
     antoine_temperature,
-    ANTOINE_COEFFICIENTS,
+    get_antoine_coefficients,
 )
 
 
@@ -113,13 +113,20 @@ def _water_tsat(P_pa: float) -> float:
     Saturation temperature of pure water at pressure P (Pa).
     Uses Antoine equation (water_high coefficients for broader range).
     """
-    A, B, C = ANTOINE_COEFFICIENTS["water_high"][:3]
+    # Choose a coefficient set suitable for the higher-temperature range.
+    coeffs = get_antoine_coefficients("water", T_celsius=120.0)
+    if not coeffs:
+        raise ValueError("Missing Antoine coefficients for water")
+    A, B, C, _, _ = coeffs
     return antoine_temperature(P_pa, A, B, C)
 
 
 def _water_psat(T_celsius: float) -> float:
     """Saturation pressure of pure water at T (°C) in Pa."""
-    A, B, C = ANTOINE_COEFFICIENTS["water_high"][:3]
+    coeffs = get_antoine_coefficients("water", T_celsius=T_celsius)
+    if not coeffs:
+        raise ValueError("Missing Antoine coefficients for water")
+    A, B, C, _, _ = coeffs
     return antoine_pressure(T_celsius, A, B, C)
 
 

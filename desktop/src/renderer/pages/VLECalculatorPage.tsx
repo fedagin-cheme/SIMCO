@@ -566,6 +566,8 @@ function PropCell({
 
 function BinaryMixtureView() {
   const [pairIndex, setPairIndex] = useState(0)
+  const [pairs, setPairs] = useState<{ comp1: string; comp2: string; label: string }[]>([])
+  const [pairsError, setPairsError] = useState<string | null>(null)
   const [spec, setSpec] = useState<BinarySpec>('pressure')
   const [pressure, setPressure] = useState('1.01325')
   const [temperature, setTemperature] = useState('80')
@@ -574,9 +576,26 @@ function BinaryMixtureView() {
 
   const { loading, error, call } = useEngine<TxyResult | PxyResult>()
 
-  const pair = BINARY_PAIRS[pairIndex]
+  // Fetch available binary pairs from the engine DB
+  useEffect(() => {
+    fetch('http://localhost:8742/api/vle/binary/pairs')
+      .then((r) => r.json())
+      .then((data) => {
+        const ps = (data.pairs ?? []).map((p: any) => ({
+          comp1: String(p.comp1),
+          comp2: String(p.comp2),
+          label: `${String(p.comp1)} / ${String(p.comp2)}`,
+        }))
+        setPairs(ps)
+        setPairIndex(0)
+      })
+      .catch((e) => setPairsError(e.message))
+  }, [])
+
+  const pair = pairs[pairIndex]
 
   async function handleGenerate() {
+    if (!pair) return
     if (spec === 'pressure') {
       const data = await call('/api/vle/binary/txy', {
         comp1: pair.comp1,
@@ -665,7 +684,7 @@ function BinaryMixtureView() {
     }))
   })()
 
-  const comp1Label = activeData?.comp1 ?? pair.comp1
+  const comp1Label = activeData?.comp1 ?? pair?.comp1 ?? ''
 
   return (
     <div className="flex gap-4 flex-1 min-h-0">
@@ -674,13 +693,18 @@ function BinaryMixtureView() {
         <div className="panel p-4 space-y-4">
           <p className="label">Binary System</p>
 
+          {pairsError ? (
+            <ErrorMessage message={`Failed to load binary pairs: ${pairsError}`} />
+          ) : null}
+
           <Field label="Component Pair">
             <select
               value={pairIndex}
               onChange={(e) => setPairIndex(Number(e.target.value))}
               className="input-field w-full"
+              disabled={pairs.length === 0}
             >
-              {BINARY_PAIRS.map((p, i) => (
+              {pairs.map((p, i) => (
                 <option key={i} value={i}>
                   {p.label}
                 </option>
@@ -1425,6 +1449,8 @@ function ElectrolyteView() {
 
 function AmineSolventView() {
   const [pairIndex, setPairIndex] = useState(0)
+  const [pairs, setPairs] = useState<{ comp1: string; comp2: string; label: string }[]>([])
+  const [pairsError, setPairsError] = useState<string | null>(null)
   const [spec, setSpec] = useState<BinarySpec>('pressure')
   const [pressure, setPressure] = useState('1.01325')
   const [temperature, setTemperature] = useState('80')
@@ -1433,9 +1459,35 @@ function AmineSolventView() {
 
   const { loading, error, call } = useEngine<TxyResult | PxyResult>()
 
-  const pair = AMINE_PAIRS[pairIndex]
+  // Fetch available NRTL pairs and keep only amine-water systems (MEA/MDEA).
+  useEffect(() => {
+    fetch('http://localhost:8742/api/vle/binary/pairs')
+      .then((r) => r.json())
+      .then((data) => {
+        const raw = (data.pairs ?? []) as any[]
+        const filtered = raw.filter((p) => {
+          const a = String(p.comp1).toLowerCase()
+          const b = String(p.comp2).toLowerCase()
+          const hasAmine = a.includes('mea') || a.includes('mdea') || b.includes('mea') || b.includes('mdea')
+          const isWaterKey = (s: string) => s.includes('water') || s === 'h2o' || s.includes('h2o')
+          const hasWater = isWaterKey(a) || isWaterKey(b)
+          return hasAmine && hasWater
+        })
+        const ps = filtered.map((p) => ({
+          comp1: String(p.comp1),
+          comp2: String(p.comp2),
+          label: `${String(p.comp1)} / ${String(p.comp2)}`,
+        }))
+        setPairs(ps)
+        setPairIndex(0)
+      })
+      .catch((e) => setPairsError(e.message))
+  }, [])
+
+  const pair = pairs[pairIndex]
 
   async function handleGenerate() {
+    if (!pair) return
     if (spec === 'pressure') {
       const data = await call('/api/vle/binary/txy', {
         comp1: pair.comp1,
@@ -1513,7 +1565,7 @@ function AmineSolventView() {
     }))
   })()
 
-  const comp1Label = activeData?.comp1 ?? pair.comp1
+  const comp1Label = activeData?.comp1 ?? pair?.comp1 ?? ''
 
   return (
     <div className="flex gap-4 flex-1 min-h-0">
@@ -1522,13 +1574,18 @@ function AmineSolventView() {
         <div className="panel p-4 space-y-4">
           <p className="label">Amine-Water Binary</p>
 
+          {pairsError ? (
+            <ErrorMessage message={`Failed to load amine pairs: ${pairsError}`} />
+          ) : null}
+
           <Field label="Amine Solvent">
             <select
               value={pairIndex}
               onChange={(e) => setPairIndex(Number(e.target.value))}
               className="input-field w-full"
+              disabled={pairs.length === 0}
             >
-              {AMINE_PAIRS.map((p, i) => (
+              {pairs.map((p, i) => (
                 <option key={i} value={i}>
                   {p.label}
                 </option>

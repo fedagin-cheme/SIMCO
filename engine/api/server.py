@@ -10,11 +10,10 @@ from engine.thermo.antoine import (
     get_critical_properties,
     validate_conditions,
     get_all_compound_details,
-    ANTOINE_COEFFICIENTS,
-    CRITICAL_PROPERTIES,
     CATEGORIES,
 )
-from engine.thermo.nrtl import get_nrtl_params, NRTL_BINARY_PARAMS
+from engine.thermo.nrtl import get_nrtl_params
+from engine.database.db import ChemicalDatabase
 from engine.api.routes.vle import bubble_point_temperature, bubble_point_pressure, generate_txy_diagram, generate_pxy_diagram
 from engine.thermo.electrolyte_vle import (
     get_available_electrolytes,
@@ -63,13 +62,8 @@ def list_compounds():
 @app.get("/api/vle/binary/pairs")
 def list_binary_pairs():
     """List all binary pairs with NRTL parameters available for Txy diagrams."""
-    pairs = []
-    for (comp1, comp2), (dg12, dg21, alpha) in NRTL_BINARY_PARAMS.items():
-        pairs.append({
-            "comp1": comp1,
-            "comp2": comp2,
-            "alpha12": alpha,
-        })
+    with ChemicalDatabase() as db:
+        pairs = db.list_nrtl_pairs()
     return {"pairs": pairs}
 
 
