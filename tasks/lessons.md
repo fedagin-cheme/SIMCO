@@ -15,7 +15,7 @@
 
 ## Database & Data Management
 
-5. **Database is regenerated from seed** — the .db file is gitignored. The seed script is the source of truth for baseline data. However, the in-code dictionaries (ANTOINE_COEFFICIENTS, NRTL_BINARY_PARAMS, HENRY_CONSTANTS) are the runtime source of truth for the calculation engine.
+5. **simco_chemdb.json is the single source of truth** — all compound metadata, Antoine coefficients, NRTL parameters, Henry constants, and packing data live in the JSON database. The seed script creates copies for testing. No thermodynamic data is hardcoded in Python modules.
 
 6. **Export what tests import** — test suite imported `MMHG_TO_PA` from antoine.py but it was only used as a magic number (133.322). Always define constants as named exports when other modules reference them.
 
@@ -25,7 +25,7 @@
 
 8. **Windows Store Python breaks Node.js PATH** — the Microsoft Store Python installation created PATH conflicts with Node.js child process spawning. Use standard Python installer or pyenv instead.
 
-9. **Compound registry belongs in code, not just SQLite** — putting compound metadata (MW, formula, CAS, category) in the Python module (antoine.py COMPOUND_DATA dict) is faster and more maintainable than SQLite for the core set. SQLite is for user-defined compounds and bulk data.
+9. **JSON DB with class-level cache beats SQLite for read-only data** — simco_chemdb.json is parsed once into a class-level cache. Module-level `get_db()` singleton avoids re-indexing. This is simpler than SQLite (no driver deps, no .db file management) and fast enough for real-time calculations.
 
 ## Frontend Patterns
 
@@ -38,3 +38,27 @@
 12. **Acid gas + amine VLE is reactive, not simple physical equilibrium** — CO₂ + MEA → carbamate. Standard NRTL cannot model this. Need Kent-Eisenberg (MVP) or eNRTL (full rigor) for acid gas equilibrium. Binary VLE mode is only valid for non-reactive pairs.
 
 13. **Component categories matter for UX** — grouping compounds into Gases to Remove / Amine Solvents / Physical Solvents / Carrier-Inert / Validation makes the tool immediately navigable for process engineers vs. a flat alphabetical list.
+
+## Electrolyte VLE (Phase 2B)
+
+14. **BPE polynomial correlations beat rigorous models for engineering MVP** — for NaOH-H₂O and K₂CO₃-H₂O, 3rd-order polynomial fits to handbook data give excellent accuracy (±0.5°C) without the complexity of Pitzer or eNRTL. Fit once on import, evaluate cheaply at runtime.
+
+15. **Dühring rule is a practical pressure-scaling tool** — BPE(P) ≈ BPE(1atm) × (T_sat(P) + 273.15) / 373.15 provides reasonable pressure correction without needing full thermodynamic models across pressure ranges.
+
+16. **Electrolyte and volatile-binary VLE need fundamentally different UI** — electrolytes show BPE curves (T vs w/w%) and VP depression (P vs w/w%), not Txy phase envelopes. The "Scrubbing Solvents" tab correctly splits into Electrolyte Solution and Amine Solution sub-views with distinct input/output patterns.
+
+17. **Water activity from BPE is self-consistent** — deriving a_w from the BPE data using a_w = P°_water(100°C) / P°_water(T_boil) ensures the vapor pressure depression and boiling point elevation calculations agree. This avoids the need for separate activity coefficient models.
+
+18. **Always check before building — code may already exist** — when resuming from a compacted conversation, the implementation may already be complete from a previous session. Run tests and verify the codebase state before writing new code.
+
+## JSON DB Migration (Phase 2C)
+
+19. **Singleton DB pattern eliminates repeated JSON parsing** — `with ChemicalDatabase() as db:` rebuilds indices on every call. Module-level `get_db()` singleton caches the connected instance. Hot-path calls (Txy generation: 50+ DB lookups) went from redundant parsing to <2ms total.
+
+20. **Index rebuild guard with `_indices_built` flag** — even with class-level `_cache`, `_build_indices()` was called every `connect()`. Adding a simple boolean flag skips re-indexing when data hasn't changed.
+
+21. **Inline record-building in list/search to avoid O(n²)** — `list_compounds()` called `get_compound()` per component (each doing `_resolve_component` lookup). Extracting `_build_compound_record()` and calling it directly on the raw JSON component avoids the index lookup overhead.
+
+22. **Remove hardcoded fallback keys** — NRTL `tau_AplusBoverT` had `params.get("MEA_to_H2O")` fallbacks that only worked for one specific pair. Generic dict-value scanning works for any pair.
+
+23. **Dead frontend constants after API migration** — when the frontend switches from hardcoded arrays to dynamic API fetches, remove the old constants immediately to prevent confusion.

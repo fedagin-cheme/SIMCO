@@ -1,279 +1,446 @@
-"""
-Chemical property database backed by SQLite.
+"""engine.database.db
 
-Stores:
-    - Compound properties (MW, Tc, Pc, omega, etc.)
-    - Antoine coefficients
-    - NRTL binary interaction parameters
-    - Henry's law constants
-    - Packing characteristics (HETP, specific surface area, void fraction)
+JSON-backed chemical property database.
+
+This replaces the earlier SQLite-backed implementation. The public API is kept
+stable so the rest of the engine and the desktop UI can remain thin:
+
+- compounds
+- Antoine coefficients (possibly multiple ranges)
+- NRTL binary parameters
+- Henry constants
+
+Data source:
+    engine/database/simco_chemdb.json
+
+The DB format is the SIMCO JSON format produced for the scrubbing/stripping
+simulator.
 """
 
-import sqlite3
+from __future__ import annotations
+
+import json
 import os
-from typing import Optional, List, Dict, Any
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "simco_chemicals.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "simco_chemdb.json")
+
+
+def _norm(s: str) -> str:
+    return s.strip().lower().replace(" ", "_").replace("-", "_")
+
+
+@dataclass(frozen=True)
+class _Antoine:
+    A: float
+    B: float
+    C: float
+    Tmin_C: float
+    Tmax_C: float
+    source: str
 
 
 class ChemicalDatabase:
-    """Interface to the SIMCO chemical property database."""
+    """In-process DB wrapper.
+
+    Usage:
+        db = get_db()
+        db.get_compound("water")
+
+    The legacy context-manager form still works but prefer get_db() for
+    hot-path code to avoid repeated index rebuilds.
+    """
+
+    _cache: Optional[Dict[str, Any]] = None
 
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
-        self._conn = None
+        self._db: Dict[str, Any] = {}
+        self._comp_index: Dict[str, Dict[str, Any]] = {}
+        self._name_index: Dict[str, Dict[str, Any]] = {}
+        self._indices_built: bool = False
 
-    def connect(self):
-        """Open connection and ensure tables exist."""
-        self._conn = sqlite3.connect(self.db_path)
-        self._conn.row_factory = sqlite3.Row
-        self._create_tables()
+    # Context manager parity with old SQLite version
+    def connect(self) -> "ChemicalDatabase":
+        if ChemicalDatabase._cache is None or ChemicalDatabase._cache.get("__path") != self.db_path:
+            with open(self.db_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            data["__path"] = self.db_path
+            ChemicalDatabase._cache = data
+            # Invalidate indices when cache changes
+            self._indices_built = False
+        self._db = ChemicalDatabase._cache
+        if not self._indices_built:
+            self._build_indices()
         return self
 
-    def close(self):
-        """Close database connection."""
-        if self._conn:
-            self._conn.close()
-            self._conn = None
+    def close(self) -> None:
+        # No persistent connection to close.
+        return
 
-    def __enter__(self):
+    def __enter__(self) -> "ChemicalDatabase":
         return self.connect()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
-    # ── Schema ────────────────────────────────────────────
+    # ── Indexing ─────────────────────────────────────────────────────────
 
-    def _create_tables(self):
-        cur = self._conn.cursor()
+    def _build_indices(self) -> None:
+        self._comp_index.clear()
+        self._name_index.clear()
+        for comp in self._db.get("components", []):
+            cid = _norm(comp.get("id", ""))
+            name = _norm(comp.get("name", ""))
+            cas = _norm(comp.get("identifiers", {}).get("cas", ""))
+            if cid:
+                self._comp_index[cid] = comp
+            if name:
+                self._name_index[name] = comp
+            if cas:
+                self._comp_index[cas] = comp
+            # convenience: allow lookup by formula-like ids (CO2, H2S) and by common keys
+            formula = _norm(comp.get("formula", ""))
+            if formula:
+                self._comp_index[formula] = comp
+        self._indices_built = True
 
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS compounds (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                formula TEXT,
-                cas_number TEXT,
-                mw REAL,              -- g/mol
-                tc REAL,              -- Critical temperature [K]
-                pc REAL,              -- Critical pressure [Pa]
-                omega REAL,           -- Acentric factor
-                tb REAL,              -- Normal boiling point [K]
-                category TEXT         -- 'solvent', 'gas', 'acid', etc.
-            )
-        """)
+    def _resolve_component(self, key: str) -> Optional[Dict[str, Any]]:
+        k = _norm(key)
+        return self._comp_index.get(k) or self._name_index.get(k)
 
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS antoine_coefficients (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                compound_name TEXT NOT NULL,
-                A REAL NOT NULL,
-                B REAL NOT NULL,
-                C REAL NOT NULL,
-                T_min REAL,           -- Valid range [°C]
-                T_max REAL,
-                source TEXT,
-                FOREIGN KEY (compound_name) REFERENCES compounds(name)
-            )
-        """)
+    # ── Compound queries ────────────────────────────────────────────────
 
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS nrtl_parameters (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                comp1 TEXT NOT NULL,
-                comp2 TEXT NOT NULL,
-                dg12 REAL NOT NULL,   -- J/mol
-                dg21 REAL NOT NULL,   -- J/mol
-                alpha12 REAL NOT NULL,
-                T_ref REAL,           -- Reference temperature [K]
-                source TEXT,
-                UNIQUE(comp1, comp2)
-            )
-        """)
+    def _build_compound_record(self, c: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a flat compound record from a raw JSON component entry."""
+        identifiers = c.get("identifiers", {}) or {}
+        critical = c.get("critical", {}) or {}
 
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS henry_constants (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                gas TEXT NOT NULL,
-                solvent TEXT NOT NULL DEFAULT 'water',
-                H_pa REAL NOT NULL,   -- Henry's constant [Pa]
-                dH_sol REAL,          -- Enthalpy of dissolution [J/mol]
-                T_ref REAL DEFAULT 298.15,
-                source TEXT,
-                UNIQUE(gas, solvent)
-            )
-        """)
+        tb_K = None
+        for corr in c.get("correlations", []) or []:
+            if corr.get("property") == "Tb" and corr.get("model") == "constant":
+                tb_K = corr.get("parameters", {}).get("Tb_K")
+                break
 
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS packing_data (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                type TEXT,            -- 'random', 'structured'
-                material TEXT,        -- 'metal', 'ceramic', 'plastic'
-                nominal_size_mm REAL,
-                specific_area REAL,   -- m²/m³
-                void_fraction REAL,
-                packing_factor REAL,  -- 1/m
-                hetp REAL,            -- m (typical)
-                source TEXT
-            )
-        """)
-
-        self._conn.commit()
-
-    # ── Compound queries ──────────────────────────────────
+        return {
+            "name": c.get("name", ""),
+            "formula": c.get("formula", ""),
+            "cas_number": identifiers.get("cas", ""),
+            "mw": c.get("mw"),
+            "tc": critical.get("Tc_K"),
+            "pc": critical.get("Pc_Pa"),
+            "omega": critical.get("omega"),
+            "tb": tb_K,
+            "category": c.get("category", ""),
+            "description": c.get("description", ""),
+            "id": c.get("id", ""),
+        }
 
     def get_compound(self, name: str) -> Optional[Dict[str, Any]]:
-        """Get compound properties by name."""
-        cur = self._conn.cursor()
-        cur.execute("SELECT * FROM compounds WHERE LOWER(name) = LOWER(?)", (name,))
-        row = cur.fetchone()
-        return dict(row) if row else None
+        """Get compound metadata.
+
+        Returns a dict shaped similarly to the old SQLite record.
+        """
+        c = self._resolve_component(name)
+        if not c:
+            return None
+        return self._build_compound_record(c)
 
     def search_compounds(self, query: str) -> List[Dict[str, Any]]:
-        """Search compounds by name or formula (partial match)."""
-        cur = self._conn.cursor()
-        cur.execute(
-            "SELECT * FROM compounds WHERE LOWER(name) LIKE ? OR LOWER(formula) LIKE ?",
-            (f"%{query.lower()}%", f"%{query.lower()}%"),
-        )
-        return [dict(row) for row in cur.fetchall()]
+        q = _norm(query)
+        out: List[Dict[str, Any]] = []
+        for c in self._db.get("components", []):
+            if q in _norm(c.get("name", "")) or q in _norm(c.get("formula", "")):
+                out.append(self._build_compound_record(c))
+        return out
 
     def list_compounds(self, category: str = None) -> List[Dict[str, Any]]:
-        """List all compounds, optionally filtered by category."""
-        cur = self._conn.cursor()
-        if category:
-            cur.execute(
-                "SELECT * FROM compounds WHERE LOWER(category) = LOWER(?) ORDER BY name",
-                (category,),
+        out: List[Dict[str, Any]] = []
+        cat_norm = _norm(category) if category else None
+        for c in self._db.get("components", []):
+            # Inline record building to avoid O(n) _resolve_component per item
+            rec = self._build_compound_record(c)
+            if not rec:
+                continue
+            if category:
+                rec_cat = _norm(rec.get("category", ""))
+                # Backward-compatible grouping used in tests and some UI pieces.
+                if cat_norm == "gas":
+                    if "gas" not in rec_cat:
+                        continue
+                elif cat_norm == "solvent":
+                    # Treat common liquid categories as solvents.
+                    if (
+                        "solvent" not in rec_cat
+                        and rec_cat not in {"organic", "amine_solvent", "physical_solvent"}
+                    ):
+                        # Heuristic fallback: if Tb exists and is near/above room temperature,
+                        # consider it a solvent-like liquid.
+                        tb = rec.get("tb")
+                        if tb is None or tb < 273.15 + 20.0:
+                            continue
+                else:
+                    if rec_cat != cat_norm:
+                        continue
+            out.append(rec)
+        out.sort(key=lambda r: (r.get("category", ""), r.get("name", "")))
+        return out
+
+    # ── Antoine queries ────────────────────────────────────────────────
+
+    def _antoine_sets(self, comp: Dict[str, Any]) -> List[_Antoine]:
+        sets: List[_Antoine] = []
+        for corr in comp.get("correlations", []) or []:
+            if corr.get("property") != "Psat":
+                continue
+            if corr.get("model") != "Antoine_log10_PmmHg_TdegC":
+                continue
+            p = corr.get("parameters", {}) or {}
+            v = corr.get("validity", {}) or {}
+            Tmin_K = v.get("Tmin_K")
+            Tmax_K = v.get("Tmax_K")
+            if Tmin_K is None or Tmax_K is None:
+                continue
+            sets.append(
+                _Antoine(
+                    A=float(p.get("A")),
+                    B=float(p.get("B")),
+                    C=float(p.get("C")),
+                    Tmin_C=float(Tmin_K) - 273.15,
+                    Tmax_C=float(Tmax_K) - 273.15,
+                    source=str(corr.get("source_ref", "")),
+                )
             )
-        else:
-            cur.execute("SELECT * FROM compounds ORDER BY name")
-        return [dict(row) for row in cur.fetchall()]
+        # sort by Tmin
+        sets.sort(key=lambda s: s.Tmin_C)
+        return sets
 
-    # ── Antoine queries ───────────────────────────────────
+    def get_antoine(self, compound_name: str, T_celsius: float = None) -> Optional[Dict[str, Any]]:
+        """Return a single Antoine set.
 
-    def get_antoine(self, compound_name: str) -> Optional[Dict[str, Any]]:
-        """Get Antoine coefficients for a compound."""
-        cur = self._conn.cursor()
-        cur.execute(
-            "SELECT * FROM antoine_coefficients WHERE LOWER(compound_name) = LOWER(?)",
-            (compound_name,),
-        )
-        row = cur.fetchone()
-        return dict(row) if row else None
-
-    # ── NRTL queries ──────────────────────────────────────
-
-    def get_nrtl(self, comp1: str, comp2: str) -> Optional[Dict[str, Any]]:
-        """Get NRTL binary parameters (handles order automatically)."""
-        cur = self._conn.cursor()
-        cur.execute(
-            """SELECT * FROM nrtl_parameters
-               WHERE (LOWER(comp1)=LOWER(?) AND LOWER(comp2)=LOWER(?))
-                  OR (LOWER(comp1)=LOWER(?) AND LOWER(comp2)=LOWER(?))""",
-            (comp1, comp2, comp2, comp1),
-        )
-        row = cur.fetchone()
-        if not row:
+        If T_celsius is provided, choose the set whose validity range contains T.
+        Otherwise return the first set.
+        """
+        comp = self._resolve_component(compound_name)
+        if not comp:
             return None
-        result = dict(row)
-        # If the pair is reversed, swap dg12/dg21
-        if result["comp1"].lower() != comp1.lower():
-            result["dg12"], result["dg21"] = result["dg21"], result["dg12"]
-            result["comp1"], result["comp2"] = comp1, comp2
-        return result
 
-    # ── Henry queries ─────────────────────────────────────
+        sets = self._antoine_sets(comp)
+        if not sets:
+            return None
+
+        # Default behavior (no temperature provided): prefer the set that spans
+        # the highest temperatures (most useful for boiling/operating points).
+        chosen = max(sets, key=lambda s: s.Tmax_C)
+        if T_celsius is not None:
+            for s in sets:
+                if s.Tmin_C <= T_celsius <= s.Tmax_C:
+                    chosen = s
+                    break
+
+        return {
+            "compound_name": comp.get("name", ""),
+            "A": chosen.A,
+            "B": chosen.B,
+            "C": chosen.C,
+            "T_min": chosen.Tmin_C,
+            "T_max": chosen.Tmax_C,
+            "source": chosen.source,
+        }
+
+    # ── NRTL queries ───────────────────────────────────────────────────
+
+    def get_nrtl(self, comp1: str, comp2: str, T_kelvin: float = 298.15) -> Optional[Dict[str, Any]]:
+        """Return NRTL parameters for (comp1, comp2).
+
+        Supports:
+            - form=dg_const: parameters {dg12, dg21, alpha}
+            - form=tau_AplusBoverT: parameters {comp1_to_comp2:{A,B}, comp2_to_comp1:{A,B}, alpha}
+
+        Always returns dg12/dg21/alpha12 at the provided T.
+        """
+        k1 = _norm(comp1)
+        k2 = _norm(comp2)
+
+        for rec in self._db.get("binary_interactions", []) or []:
+            if rec.get("model_family") != "NRTL":
+                continue
+            comps = rec.get("components", []) or []
+            if len(comps) != 2:
+                continue
+            a = _norm(comps[0])
+            b = _norm(comps[1])
+            if not ((a == k1 and b == k2) or (a == k2 and b == k1)):
+                continue
+
+            form = rec.get("form")
+            params = rec.get("parameters", {}) or {}
+            alpha = float(params.get("alpha", params.get("alpha12", 0.3)))
+
+            if form == "dg_const":
+                dg12 = float(params.get("dg12"))
+                dg21 = float(params.get("dg21"))
+            elif form == "tau_AplusBoverT":
+                # tau = A + B/T
+                # Try named keys first, then positional fallbacks
+                key12 = f"{comps[0]}_to_{comps[1]}"
+                key21 = f"{comps[1]}_to_{comps[0]}"
+                p12 = params.get(key12) or params.get("comp1_to_comp2")
+                p21 = params.get(key21) or params.get("comp2_to_comp1")
+                # Generic fallback: scan for any dict values with {A, B} structure
+                if not p12 or not p21:
+                    dict_vals = [
+                        (k, v) for k, v in params.items()
+                        if isinstance(v, dict) and "A" in v and "B" in v
+                    ]
+                    if len(dict_vals) >= 2:
+                        p12 = dict_vals[0][1]
+                        p21 = dict_vals[1][1]
+                if not p12 or not p21:
+                    return None
+                tau12 = float(p12.get("A")) + float(p12.get("B")) / float(T_kelvin)
+                tau21 = float(p21.get("A")) + float(p21.get("B")) / float(T_kelvin)
+                R = 8.314
+                dg12 = tau12 * R * float(T_kelvin)
+                dg21 = tau21 * R * float(T_kelvin)
+            else:
+                return None
+
+            # If order is reversed, swap
+            if a != k1:
+                dg12, dg21 = dg21, dg12
+
+            return {
+                "comp1": comp1,
+                "comp2": comp2,
+                "dg12": dg12,
+                "dg21": dg21,
+                "alpha12": alpha,
+                "T_ref": T_kelvin,
+                "source": rec.get("source_ref", ""),
+            }
+
+        return None
+
+    # ── Henry queries ──────────────────────────────────────────────────
 
     def get_henry(self, gas: str, solvent: str = "water") -> Optional[Dict[str, Any]]:
-        """Get Henry's law constant for a gas-solvent pair."""
-        cur = self._conn.cursor()
-        cur.execute(
-            """SELECT * FROM henry_constants
-               WHERE LOWER(gas)=LOWER(?) AND LOWER(solvent)=LOWER(?)""",
-            (gas, solvent),
-        )
-        row = cur.fetchone()
-        return dict(row) if row else None
+        comp = self._resolve_component(gas)
+        if not comp:
+            return None
+        for corr in comp.get("correlations", []) or []:
+            if corr.get("property") != "Henry_Hpa":
+                continue
+            p = corr.get("parameters", {}) or {}
+            if _norm(p.get("solvent", "water")) != _norm(solvent):
+                continue
+            return {
+                "gas": gas,
+                "solvent": solvent,
+                "H_pa": float(p.get("H_pa")),
+                "dH_sol": float(p.get("dH_sol_J_mol", 0.0)),
+                "T_ref": float(p.get("T_ref_K", 298.15)),
+                "source": corr.get("source_ref", ""),
+            }
+        return None
 
     def list_henry(self, solvent: str = "water") -> List[Dict[str, Any]]:
-        """List all Henry's constants for a solvent."""
-        cur = self._conn.cursor()
-        cur.execute(
-            "SELECT * FROM henry_constants WHERE LOWER(solvent)=LOWER(?) ORDER BY gas",
-            (solvent,),
-        )
-        return [dict(row) for row in cur.fetchall()]
+        out = []
+        for c in self._db.get("components", []) or []:
+            rec = self.get_henry(c.get("id", ""), solvent=solvent)
+            if rec:
+                out.append(rec)
+        out.sort(key=lambda r: _norm(r.get("gas", "")))
+        return out
 
-    # ── Packing queries ───────────────────────────────────
+    # ── Packing queries (not yet in JSON DB) ────────────────────────────
 
     def get_packing(self, name: str) -> Optional[Dict[str, Any]]:
-        """Get packing characteristics by name."""
-        cur = self._conn.cursor()
-        cur.execute("SELECT * FROM packing_data WHERE LOWER(name) = LOWER(?)", (name,))
-        row = cur.fetchone()
-        return dict(row) if row else None
+        n = _norm(name)
+        for p in self._db.get("packings", []) or []:
+            if _norm(p.get("name", "")) == n:
+                return dict(p)
+        return None
 
     def list_packings(self, packing_type: str = None) -> List[Dict[str, Any]]:
-        """List all packings, optionally filtered by type."""
-        cur = self._conn.cursor()
-        if packing_type:
-            cur.execute(
-                "SELECT * FROM packing_data WHERE LOWER(type)=LOWER(?) ORDER BY name",
-                (packing_type,),
-            )
-        else:
-            cur.execute("SELECT * FROM packing_data ORDER BY name")
-        return [dict(row) for row in cur.fetchall()]
+        out: List[Dict[str, Any]] = []
+        for p in self._db.get("packings", []) or []:
+            if packing_type and _norm(p.get("type", "")) != _norm(packing_type):
+                continue
+            out.append(dict(p))
+        out.sort(key=lambda r: _norm(r.get("name", "")))
+        return out
 
-    # ── Bulk insert helpers ───────────────────────────────
+    # ── Interaction listing helpers ────────────────────────────────────
+
+    def list_nrtl_pairs(self) -> List[Dict[str, Any]]:
+        """List all NRTL binary interaction pairs.
+
+        Returns a list of dicts:
+            {comp1, comp2, alpha12, comp1_name, comp2_name, source}
+
+        Notes:
+            - comp1/comp2 are returned as stored in the DB.
+            - comp*_name are resolved via component lookup when possible.
+        """
+        out: List[Dict[str, Any]] = []
+        for rec in self._db.get("binary_interactions", []) or []:
+            if rec.get("model_family") != "NRTL":
+                continue
+            comps = rec.get("components", []) or []
+            if len(comps) != 2:
+                continue
+            c1, c2 = str(comps[0]), str(comps[1])
+            p = rec.get("parameters", {}) or {}
+            alpha = float(p.get("alpha", p.get("alpha12", 0.3)))
+            r1 = self.get_compound(c1) or {}
+            r2 = self.get_compound(c2) or {}
+            out.append(
+                {
+                    "comp1": c1,
+                    "comp2": c2,
+                    "alpha12": alpha,
+                    "comp1_name": r1.get("name", c1),
+                    "comp2_name": r2.get("name", c2),
+                    "source": rec.get("source_ref", ""),
+                }
+            )
+
+        out.sort(key=lambda r: (_norm(r.get("comp1", "")), _norm(r.get("comp2", ""))))
+        return out
+
+    # ── Mutating methods (DB is treated as read-only in-engine) ─────────
 
     def add_compound(self, **kwargs):
-        """Insert a compound. kwargs: name, formula, cas_number, mw, tc, pc, omega, tb, category."""
-        cols = ", ".join(kwargs.keys())
-        placeholders = ", ".join(["?"] * len(kwargs))
-        self._conn.execute(
-            f"INSERT OR REPLACE INTO compounds ({cols}) VALUES ({placeholders})",
-            tuple(kwargs.values()),
-        )
-        self._conn.commit()
+        raise NotImplementedError("JSON DB is read-only in-engine")
 
     def add_antoine(self, **kwargs):
-        """Insert Antoine coefficients."""
-        cols = ", ".join(kwargs.keys())
-        placeholders = ", ".join(["?"] * len(kwargs))
-        self._conn.execute(
-            f"INSERT OR REPLACE INTO antoine_coefficients ({cols}) VALUES ({placeholders})",
-            tuple(kwargs.values()),
-        )
-        self._conn.commit()
+        raise NotImplementedError("JSON DB is read-only in-engine")
 
     def add_nrtl(self, **kwargs):
-        """Insert NRTL binary parameters."""
-        cols = ", ".join(kwargs.keys())
-        placeholders = ", ".join(["?"] * len(kwargs))
-        self._conn.execute(
-            f"INSERT OR REPLACE INTO nrtl_parameters ({cols}) VALUES ({placeholders})",
-            tuple(kwargs.values()),
-        )
-        self._conn.commit()
+        raise NotImplementedError("JSON DB is read-only in-engine")
 
     def add_henry(self, **kwargs):
-        """Insert Henry's law constant."""
-        cols = ", ".join(kwargs.keys())
-        placeholders = ", ".join(["?"] * len(kwargs))
-        self._conn.execute(
-            f"INSERT OR REPLACE INTO henry_constants ({cols}) VALUES ({placeholders})",
-            tuple(kwargs.values()),
-        )
-        self._conn.commit()
+        raise NotImplementedError("JSON DB is read-only in-engine")
 
     def add_packing(self, **kwargs):
-        """Insert packing data."""
-        cols = ", ".join(kwargs.keys())
-        placeholders = ", ".join(["?"] * len(kwargs))
-        self._conn.execute(
-            f"INSERT OR REPLACE INTO packing_data ({cols}) VALUES ({placeholders})",
-            tuple(kwargs.values()),
-        )
-        self._conn.commit()
+        raise NotImplementedError("JSON DB is read-only in-engine")
+
+
+# ── Module-level singleton ─────────────────────────────────────────────────
+
+_SINGLETON: Optional[ChemicalDatabase] = None
+
+
+def get_db() -> ChemicalDatabase:
+    """Return a singleton ChemicalDatabase instance.
+
+    Prefer this over ``with ChemicalDatabase() as db:`` on hot paths
+    (e.g. Txy diagram generation) to avoid re-building indices on every call.
+    """
+    global _SINGLETON
+    if _SINGLETON is None:
+        _SINGLETON = ChemicalDatabase()
+        _SINGLETON.connect()
+    return _SINGLETON
