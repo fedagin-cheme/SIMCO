@@ -2,12 +2,33 @@ import { useState, useEffect } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { Sidebar, Page } from './components/Sidebar'
 import { VLECalculatorPage } from './pages/VLECalculatorPage'
+import { PackedColumnPage } from './pages/PackedColumnPage'
 import { ComingSoonPage } from './pages/ComingSoonPage'
 import { checkEngineHealth } from './hooks/useEngine'
+
+/** Shared preset passed from VLE → Column Design */
+export interface GasMixtureComponent {
+  name: string
+  mw: number
+  molPercent: number
+}
+
+export interface ColumnDesignPreset {
+  gasMixture: GasMixtureComponent[]
+  targetGas: string       // name of the gas to remove
+  solventName: string
+  solventMW: number
+  T_celsius: number
+  P_bar: number
+  mixtureMW: number       // mol-fraction-weighted average MW
+  rho_G: number           // estimated gas density [kg/m³]
+  rho_L: number           // estimated liquid density [kg/m³]
+}
 
 export default function App() {
   const [activePage, setActivePage] = useState<Page>('vle-calculator')
   const [engineOnline, setEngineOnline] = useState(false)
+  const [columnPreset, setColumnPreset] = useState<ColumnDesignPreset | null>(null)
 
   // Poll engine health every 5 seconds
   useEffect(() => {
@@ -26,18 +47,18 @@ export default function App() {
     }
   }, [])
 
+  /** Called from VLE page to push system data to column design */
+  function handleSendToColumnDesign(preset: ColumnDesignPreset) {
+    setColumnPreset(preset)
+    setActivePage('packed-column')
+  }
+
   function renderPage() {
     switch (activePage) {
       case 'vle-calculator':
-        return <VLECalculatorPage />
+        return <VLECalculatorPage onSendToColumnDesign={handleSendToColumnDesign} />
       case 'packed-column':
-        return (
-          <ComingSoonPage
-            title="Packed Column Design"
-            phase="Phase 3"
-            description="HTU-NTU, HETP, flooding analysis, rate-based sizing. Coming after VLE foundation is complete."
-          />
-        )
+        return <PackedColumnPage preset={columnPreset} onClearPreset={() => setColumnPreset(null)} />
       case 'tray-column':
         return (
           <ComingSoonPage

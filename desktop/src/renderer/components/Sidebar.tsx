@@ -32,7 +32,6 @@ const NAV_ITEMS: NavItem[] = [
     id: 'packed-column',
     label: 'Packed Column',
     icon: <Columns size={16} />,
-    badge: 'Phase 3',
   },
   {
     id: 'tray-column',
