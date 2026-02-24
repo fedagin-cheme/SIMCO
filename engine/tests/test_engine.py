@@ -398,3 +398,139 @@ class TestAmineWaterVLE:
         from engine.api.routes.vle import bubble_point_temperature
         r = bubble_point_temperature(0.3, 101325.0, "mea", "water")
         assert r["y1"] < 0.10, f"MEA too volatile: y={r['y1']}"
+
+
+# ─── Packed Column Hydraulics Tests ────────────────────────────────────────
+
+from engine.thermo.column_hydraulics import (
+    flow_parameter,
+    flooding_velocity,
+    column_diameter,
+    pressure_drop_irrigated,
+    minimum_wetting_rate,
+    design_column,
+)
+
+
+class TestColumnHydraulics:
+    """Tests for packed column hydraulic design calculations."""
+
+    # Reference system: air-water at 20°C, 1 atm
+    # ρ_G = 1.2 kg/m³, ρ_L = 998 kg/m³, μ_L = 1e-3 Pa·s
+    RHO_G = 1.2
+    RHO_L = 998.0
+    MU_L = 1.0e-3
+
+    def test_flow_parameter_air_water(self):
+        """Flow parameter for L/G=1 air-water should be ~0.035."""
+        X = flow_parameter(L_mass=1.0, G_mass=1.0, rho_G=1.2, rho_L=998.0)
+        assert 0.01 < X < 0.1, f"Flow parameter X={X}, expected ~0.035"
+
+    def test_flow_parameter_high_LG(self):
+        """Higher L/G → higher flow parameter."""
+        X_low = flow_parameter(1.0, 1.0, 1.2, 998.0)
+        X_high = flow_parameter(10.0, 1.0, 1.2, 998.0)
+        assert X_high > X_low
+
+    def test_flooding_velocity_pall_ring_50mm(self):
+        """Pall Ring 50mm, air-water: u_flood should be in 1–4 m/s range.
+
+        Perry's 8th ed.: typical flooding velocities for metal Pall Rings
+        at moderate L/G are 1.5–3.5 m/s.
+        """
+        F_p = 66  # Pall Ring 50mm, m⁻¹
+        u_flood = flooding_velocity(
+            F_p=F_p, rho_G=1.2, rho_L=998.0,
+            L_mass=2.0, G_mass=1.0, mu_L=1e-3,
+        )
+        assert 1.0 < u_flood < 5.0, f"u_flood={u_flood:.2f} m/s, expected 1–4 range"
+
+    def test_flooding_velocity_structured_higher(self):
+        """Structured packing (lower F_p) should flood at higher velocity than random."""
+        # Mellapak 250Y: F_p=66, Raschig Ring 25mm: F_p=580
+        u_structured = flooding_velocity(66, 1.2, 998.0, 2.0, 1.0)
+        u_random = flooding_velocity(580, 1.2, 998.0, 2.0, 1.0)
+        assert u_structured > u_random, "Structured packing should have higher flooding velocity"
+
+    def test_column_diameter_reasonable(self):
+        """1 m³/s gas at u_flood=2 m/s, 70% → D ≈ 0.95 m."""
+        result = column_diameter(Q_gas_m3s=1.0, u_flood=2.0, flooding_fraction=0.7)
+        D = result["D_column_m"]
+        assert 0.5 < D < 2.0, f"D={D:.2f} m, expected ~0.95"
+        # Verify consistency: A = Q/u_design
+        assert abs(result["A_column_m2"] - 1.0 / (0.7 * 2.0)) < 0.001
+
+    def test_column_diameter_higher_flooding_fraction_gives_smaller(self):
+        """Higher flooding fraction → smaller column."""
+        d70 = column_diameter(1.0, 2.0, 0.70)["D_column_m"]
+        d80 = column_diameter(1.0, 2.0, 0.80)["D_column_m"]
+        assert d80 < d70
+
+    def test_pressure_drop_positive(self):
+        """Pressure drop must be positive at design conditions."""
+        dP = pressure_drop_irrigated(
+            u_G=1.5, F_p=66, rho_G=1.2, rho_L=998.0,
+            L_mass=2.0, G_mass=1.0, mu_L=1e-3,
+        )
+        assert dP > 0, f"Pressure drop must be positive, got {dP}"
+
+    def test_pressure_drop_order_of_magnitude(self):
+        """Typical absorber ΔP/Z is 100–2000 Pa/m."""
+        dP = pressure_drop_irrigated(
+            u_G=1.5, F_p=66, rho_G=1.2, rho_L=998.0,
+            L_mass=2.0, G_mass=1.0, mu_L=1e-3,
+        )
+        assert 10 < dP < 5000, f"ΔP/Z={dP:.0f} Pa/m, outside expected range"
+
+    def test_pressure_drop_increases_with_velocity(self):
+        """Higher gas velocity → higher pressure drop."""
+        common = dict(F_p=66, rho_G=1.2, rho_L=998.0, L_mass=2.0, G_mass=1.0)
+        dP_low = pressure_drop_irrigated(u_G=1.0, **common)
+        dP_high = pressure_drop_irrigated(u_G=2.0, **common)
+        assert dP_high > dP_low
+
+    def test_minimum_wetting_rate_positive(self):
+        """MWR should be a small positive number."""
+        MWR = minimum_wetting_rate(a_p=250)
+        assert MWR > 0
+        assert MWR < 0.01, f"MWR={MWR}, suspiciously high"
+
+    def test_design_column_full_integration(self):
+        """Full design calculation should produce consistent results."""
+        packing = {
+            "name": "Pall Ring 50mm",
+            "type": "random",
+            "packing_factor": 66,
+            "specific_area": 105,
+            "void_fraction": 0.96,
+        }
+        result = design_column(
+            G_mass=1.0, L_mass=3.0,
+            rho_G=1.2, rho_L=998.0,
+            T_celsius=25.0, P_bar=1.01325,
+            packing=packing, flooding_fraction=0.7,
+        )
+        # Check all required keys present
+        assert "D_column_m" in result
+        assert "u_flood_ms" in result
+        assert "pressure_drop_Pa_m" in result
+        assert "wetting_adequate" in result
+        # Diameter should be reasonable for 1 kg/s gas
+        assert 0.3 < result["D_column_m"] < 3.0
+        # Design velocity should be 70% of flooding
+        assert abs(result["u_design_ms"] - 0.7 * result["u_flood_ms"]) < 0.001
+
+    def test_design_column_with_db_packing(self):
+        """Design with actual packing from the JSON database."""
+        from engine.database.db import get_db
+        db = get_db()
+        packing = db.get_packing("Mellapak 250Y")
+        assert packing is not None, "Mellapak 250Y not found in DB"
+        result = design_column(
+            G_mass=0.5, L_mass=2.0,
+            rho_G=1.2, rho_L=998.0,
+            T_celsius=30.0, P_bar=1.01325,
+            packing=packing, flooding_fraction=0.65,
+        )
+        assert result["packing_name"] == "Mellapak 250Y"
+        assert result["D_column_m"] > 0
