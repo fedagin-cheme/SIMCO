@@ -257,3 +257,74 @@ def electrolyte_operating_point(req: OperatingPointRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Packed Column Hydraulic Design ─────────────────────────────────────────
+
+from engine.thermo.column_hydraulics import design_column
+
+
+@app.get("/api/packings")
+def list_packings(packing_type: Optional[str] = None):
+    """List available packings from the database.
+
+    Optional query param `packing_type` to filter: 'random' or 'structured'.
+    """
+    db = get_db()
+    packings = db.list_packings(packing_type=packing_type)
+    return {"packings": packings, "count": len(packings)}
+
+
+@app.get("/api/packings/{name}")
+def get_packing(name: str):
+    """Get a single packing by name."""
+    db = get_db()
+    packing = db.get_packing(name)
+    if packing is None:
+        raise HTTPException(status_code=404, detail=f"Packing '{name}' not found")
+    return packing
+
+
+class HydraulicDesignRequest(BaseModel):
+    G_mass_kgs: float
+    L_mass_kgs: float
+    rho_G_kgm3: float
+    rho_L_kgm3: float
+    T_celsius: float
+    P_bar: float
+    packing_name: str
+    flooding_fraction: float = 0.70
+    mu_L_Pas: float = 1.0e-3
+    mu_G_Pas: float = 1.8e-5
+    sigma_Nm: float = 0.072
+
+
+@app.post("/api/column/hydraulic-design")
+def hydraulic_design(req: HydraulicDesignRequest):
+    """Full packed column hydraulic design calculation."""
+    db = get_db()
+    packing = db.get_packing(req.packing_name)
+    if packing is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Packing '{req.packing_name}' not found in database",
+        )
+    try:
+        result = design_column(
+            G_mass=req.G_mass_kgs,
+            L_mass=req.L_mass_kgs,
+            rho_G=req.rho_G_kgm3,
+            rho_L=req.rho_L_kgm3,
+            T_celsius=req.T_celsius,
+            P_bar=req.P_bar,
+            packing=packing,
+            flooding_fraction=req.flooding_fraction,
+            mu_L=req.mu_L_Pas,
+            mu_G=req.mu_G_Pas,
+            sigma=req.sigma_Nm,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
