@@ -20,7 +20,7 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, Optional, Tuple
 
-from engine.database.db import ChemicalDatabase
+from engine.database.db import ChemicalDatabase, get_db
 
 # mmHg -> Pa conversion factor
 MMHG_TO_PA = 133.322
@@ -46,8 +46,8 @@ def get_antoine_coefficients(component: str, T_celsius: float = None) -> Optiona
 
     If T_celsius is given, select a coefficient set valid at that temperature.
     """
-    with ChemicalDatabase() as db:
-        rec = db.get_antoine(component, T_celsius=T_celsius)
+    db = get_db()
+    rec = db.get_antoine(component, T_celsius=T_celsius)
     if not rec:
         return None
     return (rec["A"], rec["B"], rec["C"], rec["T_min"], rec["T_max"])
@@ -55,8 +55,8 @@ def get_antoine_coefficients(component: str, T_celsius: float = None) -> Optiona
 
 def get_critical_properties(component: str) -> Optional[Tuple[float, float]]:
     """Return (Tc_celsius, Pc_bar) if available."""
-    with ChemicalDatabase() as db:
-        c = db.get_compound(component)
+    db = get_db()
+    c = db.get_compound(component)
     if not c:
         return None
     tc = c.get("tc")
@@ -108,37 +108,37 @@ def get_all_compound_details() -> Dict[str, Dict[str, Any]]:
         return name.strip().lower().replace(" ", "_").replace("-", "_")
 
     out: Dict[str, Dict[str, Any]] = {}
-    with ChemicalDatabase() as db:
-        compounds = db.list_compounds()
-        for c in compounds:
-            key = _key(c["name"])
-            antoine = db.get_antoine(c["name"])  # any set
-            crit = None
-            if c.get("tc") is not None and c.get("pc") is not None:
-                crit = {
-                    "Tc_celsius": float(c["tc"]) - 273.15,
-                    "Pc_bar": float(c["pc"]) / 1e5,
-                }
-            out[key] = {
-                "key": key,
-                "name": c["name"],
-                "formula": c.get("formula") or "",
-                "cas": c.get("cas_number") or "",
-                "mw": c.get("mw"),
-                "category": c.get("category") or "",
-                "description": c.get("description") or "",
-                "boiling_point_c": (float(c["tb"]) - 273.15) if c.get("tb") is not None else None,
-                "antoine": (
-                    {
-                        "A": antoine["A"],
-                        "B": antoine["B"],
-                        "C": antoine["C"],
-                        "T_min": antoine["T_min"],
-                        "T_max": antoine["T_max"],
-                    }
-                    if antoine
-                    else None
-                ),
-                "critical": crit,
+    db = get_db()
+    compounds = db.list_compounds()
+    for c in compounds:
+        key = _key(c["name"])
+        antoine = db.get_antoine(c["name"])  # any set
+        crit = None
+        if c.get("tc") is not None and c.get("pc") is not None:
+            crit = {
+                "Tc_celsius": float(c["tc"]) - 273.15,
+                "Pc_bar": float(c["pc"]) / 1e5,
             }
+        out[key] = {
+            "key": key,
+            "name": c["name"],
+            "formula": c.get("formula") or "",
+            "cas": c.get("cas_number") or "",
+            "mw": c.get("mw"),
+            "category": c.get("category") or "",
+            "description": c.get("description") or "",
+            "boiling_point_c": (float(c["tb"]) - 273.15) if c.get("tb") is not None else None,
+            "antoine": (
+                {
+                    "A": antoine["A"],
+                    "B": antoine["B"],
+                    "C": antoine["C"],
+                    "T_min": antoine["T_min"],
+                    "T_max": antoine["T_max"],
+                }
+                if antoine
+                else None
+            ),
+            "critical": crit,
+        }
     return out

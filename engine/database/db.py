@@ -45,8 +45,11 @@ class ChemicalDatabase:
     """In-process DB wrapper.
 
     Usage:
-        with ChemicalDatabase() as db:
-            db.get_compound("water")
+        db = get_db()
+        db.get_compound("water")
+
+    The legacy context-manager form still works but prefer get_db() for
+    hot-path code to avoid repeated index rebuilds.
     """
 
     _cache: Optional[Dict[str, Any]] = None
@@ -56,6 +59,7 @@ class ChemicalDatabase:
         self._db: Dict[str, Any] = {}
         self._comp_index: Dict[str, Dict[str, Any]] = {}
         self._name_index: Dict[str, Dict[str, Any]] = {}
+        self._indices_built: bool = False
 
     # Context manager parity with old SQLite version
     def connect(self) -> "ChemicalDatabase":
@@ -64,8 +68,11 @@ class ChemicalDatabase:
                 data = json.load(f)
             data["__path"] = self.db_path
             ChemicalDatabase._cache = data
+            # Invalidate indices when cache changes
+            self._indices_built = False
         self._db = ChemicalDatabase._cache
-        self._build_indices()
+        if not self._indices_built:
+            self._build_indices()
         return self
 
     def close(self) -> None:
@@ -97,6 +104,7 @@ class ChemicalDatabase:
             formula = _norm(comp.get("formula", ""))
             if formula:
                 self._comp_index[formula] = comp
+        self._indices_built = True
 
     def _resolve_component(self, key: str) -> Optional[Dict[str, Any]]:
         k = _norm(key)
@@ -104,20 +112,12 @@ class ChemicalDatabase:
 
     # ── Compound queries ────────────────────────────────────────────────
 
-    def get_compound(self, name: str) -> Optional[Dict[str, Any]]:
-        """Get compound metadata.
-
-        Returns a dict shaped similarly to the old SQLite record.
-        """
-        c = self._resolve_component(name)
-        if not c:
-            return None
-
+    def _build_compound_record(self, c: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a flat compound record from a raw JSON component entry."""
         identifiers = c.get("identifiers", {}) or {}
         critical = c.get("critical", {}) or {}
 
         tb_K = None
-        # Tb is stored as a correlation in the SIMCO JSON; keep compatibility here.
         for corr in c.get("correlations", []) or []:
             if corr.get("property") == "Tb" and corr.get("model") == "constant":
                 tb_K = corr.get("parameters", {}).get("Tb_K")
@@ -137,19 +137,30 @@ class ChemicalDatabase:
             "id": c.get("id", ""),
         }
 
+    def get_compound(self, name: str) -> Optional[Dict[str, Any]]:
+        """Get compound metadata.
+
+        Returns a dict shaped similarly to the old SQLite record.
+        """
+        c = self._resolve_component(name)
+        if not c:
+            return None
+        return self._build_compound_record(c)
+
     def search_compounds(self, query: str) -> List[Dict[str, Any]]:
         q = _norm(query)
         out: List[Dict[str, Any]] = []
         for c in self._db.get("components", []):
             if q in _norm(c.get("name", "")) or q in _norm(c.get("formula", "")):
-                out.append(self.get_compound(c.get("id", c.get("name", ""))) or {})
-        return [x for x in out if x]
+                out.append(self._build_compound_record(c))
+        return out
 
     def list_compounds(self, category: str = None) -> List[Dict[str, Any]]:
         out: List[Dict[str, Any]] = []
         cat_norm = _norm(category) if category else None
         for c in self._db.get("components", []):
-            rec = self.get_compound(c.get("id", c.get("name", "")))
+            # Inline record building to avoid O(n) _resolve_component per item
+            rec = self._build_compound_record(c)
             if not rec:
                 continue
             if category:
@@ -272,10 +283,20 @@ class ChemicalDatabase:
                 dg21 = float(params.get("dg21"))
             elif form == "tau_AplusBoverT":
                 # tau = A + B/T
+                # Try named keys first, then positional fallbacks
                 key12 = f"{comps[0]}_to_{comps[1]}"
                 key21 = f"{comps[1]}_to_{comps[0]}"
-                p12 = params.get(key12) or params.get("comp1_to_comp2") or params.get("MEA_to_H2O")
-                p21 = params.get(key21) or params.get("comp2_to_comp1") or params.get("H2O_to_MEA")
+                p12 = params.get(key12) or params.get("comp1_to_comp2")
+                p21 = params.get(key21) or params.get("comp2_to_comp1")
+                # Generic fallback: scan for any dict values with {A, B} structure
+                if not p12 or not p21:
+                    dict_vals = [
+                        (k, v) for k, v in params.items()
+                        if isinstance(v, dict) and "A" in v and "B" in v
+                    ]
+                    if len(dict_vals) >= 2:
+                        p12 = dict_vals[0][1]
+                        p21 = dict_vals[1][1]
                 if not p12 or not p21:
                     return None
                 tau12 = float(p12.get("A")) + float(p12.get("B")) / float(T_kelvin)
@@ -405,3 +426,21 @@ class ChemicalDatabase:
 
     def add_packing(self, **kwargs):
         raise NotImplementedError("JSON DB is read-only in-engine")
+
+
+# ── Module-level singleton ─────────────────────────────────────────────────
+
+_SINGLETON: Optional[ChemicalDatabase] = None
+
+
+def get_db() -> ChemicalDatabase:
+    """Return a singleton ChemicalDatabase instance.
+
+    Prefer this over ``with ChemicalDatabase() as db:`` on hot paths
+    (e.g. Txy diagram generation) to avoid re-building indices on every call.
+    """
+    global _SINGLETON
+    if _SINGLETON is None:
+        _SINGLETON = ChemicalDatabase()
+        _SINGLETON.connect()
+    return _SINGLETON

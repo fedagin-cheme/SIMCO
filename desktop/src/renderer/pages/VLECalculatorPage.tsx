@@ -135,21 +135,7 @@ const CATEGORY_STYLE: Record<string, { color: string; bg: string }> = {
   organic:          { color: 'text-amber-400',  bg: 'bg-amber-500/10' },
 }
 
-const BINARY_PAIRS = [
-  { comp1: 'methanol',   comp2: 'water',    label: 'Methanol / Water' },
-  { comp1: 'ethanol',    comp2: 'water',    label: 'Ethanol / Water' },
-  { comp1: 'acetone',    comp2: 'water',    label: 'Acetone / Water' },
-  { comp1: 'acetone',    comp2: 'methanol', label: 'Acetone / Methanol' },
-  { comp1: 'benzene',    comp2: 'toluene',  label: 'Benzene / Toluene' },
-  { comp1: 'methanol',   comp2: 'benzene',  label: 'Methanol / Benzene' },
-  { comp1: 'ethanol',    comp2: 'benzene',  label: 'Ethanol / Benzene' },
-  { comp1: 'chloroform', comp2: 'methanol', label: 'Chloroform / Methanol' },
-]
-
-const AMINE_PAIRS = [
-  { comp1: 'mea',  comp2: 'water', label: 'MEA / Water' },
-  { comp1: 'mdea', comp2: 'water', label: 'MDEA / Water' },
-]
+// Binary pairs are now fetched dynamically from /api/vle/binary/pairs
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 

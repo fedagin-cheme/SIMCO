@@ -8,7 +8,7 @@ Thermodynamic parameters are fetched from the JSON database.
 import math
 from typing import Optional, Tuple
 
-from engine.database.db import ChemicalDatabase
+from engine.database.db import ChemicalDatabase, get_db
 
 # Universal gas constant [J/(mol·K)]
 R = 8.314
@@ -81,8 +81,8 @@ def get_nrtl_params(comp1: str, comp2: str, T_kelvin: float = 298.15) -> Optiona
 
     Returns (dg12, dg21, alpha12) or None.
     """
-    with ChemicalDatabase() as db:
-        rec = db.get_nrtl(comp1, comp2, T_kelvin=T_kelvin)
+    db = get_db()
+    rec = db.get_nrtl(comp1, comp2, T_kelvin=T_kelvin)
     if not rec:
         return None
     return (rec["dg12"], rec["dg21"], rec["alpha12"])

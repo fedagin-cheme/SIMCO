@@ -8,7 +8,7 @@ All Henry constants are fetched from the JSON database.
 import math
 from typing import Optional, Dict
 
-from engine.database.db import ChemicalDatabase
+from engine.database.db import ChemicalDatabase, get_db
 
 # Universal gas constant [J/(mol·K)]
 R = 8.314
@@ -52,9 +52,9 @@ def get_henry_data(gas: str, solvent: str = "water") -> Optional[Dict[str, float
     Shape preserved for tests/UI:
         {H_pa, dH_sol, name?}
     """
-    with ChemicalDatabase() as db:
-        h = db.get_henry(gas, solvent=solvent)
-        c = db.get_compound(gas)
+    db = get_db()
+    h = db.get_henry(gas, solvent=solvent)
+    c = db.get_compound(gas)
 
     if not h:
         return None

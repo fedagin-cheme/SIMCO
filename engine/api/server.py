@@ -13,7 +13,7 @@ from engine.thermo.antoine import (
     CATEGORIES,
 )
 from engine.thermo.nrtl import get_nrtl_params
-from engine.database.db import ChemicalDatabase
+from engine.database.db import ChemicalDatabase, get_db
 from engine.api.routes.vle import bubble_point_temperature, bubble_point_pressure, generate_txy_diagram, generate_pxy_diagram
 from engine.thermo.electrolyte_vle import (
     get_available_electrolytes,
@@ -62,8 +62,8 @@ def list_compounds():
 @app.get("/api/vle/binary/pairs")
 def list_binary_pairs():
     """List all binary pairs with NRTL parameters available for Txy diagrams."""
-    with ChemicalDatabase() as db:
-        pairs = db.list_nrtl_pairs()
+    db = get_db()
+    pairs = db.list_nrtl_pairs()
     return {"pairs": pairs}
 
 
