@@ -8,6 +8,8 @@ import {
   Info,
   CheckCircle2,
   AlertTriangle,
+  FlaskConical,
+  X,
 } from 'lucide-react'
 import { useEngine } from '../hooks/useEngine'
 
@@ -99,7 +101,12 @@ function PropRow({ label, value }: { label: string; value: string }) {
 
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
-export function PackedColumnPage() {
+interface PackedColumnPageProps {
+  preset?: import('../App').ColumnDesignPreset | null
+  onClearPreset?: () => void
+}
+
+export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProps) {
   // Packing data
   const [packings, setPackings] = useState<Packing[]>([])
   const [packingsLoading, setPackingsLoading] = useState(true)
@@ -122,8 +129,24 @@ export function PackedColumnPage() {
   const [result, setResult] = useState<HydraulicResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [systemLabel, setSystemLabel] = useState<string | null>(null)
 
   const engine = useEngine<PackingListResponse>()
+
+  // Apply preset from VLE page
+  useEffect(() => {
+    if (!preset) return
+    setRho_G(preset.rho_G.toString())
+    setRho_L(preset.rho_L.toString())
+    setT_celsius(preset.T_celsius.toString())
+    setP_bar(preset.P_bar.toString())
+    const mixtureDesc = preset.gasMixture
+      .map(g => `${g.name} ${g.molPercent}%`)
+      .join(', ')
+    setSystemLabel(`${mixtureDesc} → Remove ${preset.targetGas} with ${preset.solventName}`)
+    // Clear the preset so it doesn't re-apply on re-renders
+    onClearPreset?.()
+  }, [preset])
 
   // Fetch packings on mount
   useEffect(() => {
@@ -204,6 +227,24 @@ export function PackedColumnPage() {
           </div>
         </div>
       </div>
+
+      {/* System banner — shows when data came from VLE */}
+      {systemLabel && (
+        <div className="panel px-4 py-2 flex items-center gap-3 bg-primary-600/5 border-primary-600/20">
+          <FlaskConical size={14} className="text-primary-400" />
+          <span className="text-xs text-primary-400 font-medium">System: {systemLabel}</span>
+          <span className="text-[10px] text-slate-600">
+            ρ<sub>G</sub>={rho_G} kg/m³ · ρ<sub>L</sub>={rho_L} kg/m³ · {T_celsius}°C · {P_bar} bar
+          </span>
+          <button
+            onClick={() => setSystemLabel(null)}
+            className="ml-auto text-slate-600 hover:text-slate-400 transition-colors"
+            title="Dismiss"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Main layout */}
       <div className="flex gap-4 flex-1 min-h-0">
