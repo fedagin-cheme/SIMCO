@@ -10,7 +10,18 @@ import {
   AlertTriangle,
   FlaskConical,
   X,
+  Ruler,
 } from 'lucide-react'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts'
 import { useEngine } from '../hooks/useEngine'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -58,6 +69,38 @@ interface HydraulicResult {
   wetting_adequate: boolean
 }
 
+interface MassTransferResult {
+  y_in: number
+  y_out: number
+  removal_percent: number
+  m_equilibrium: number
+  absorption_factor_A: number
+  N_OG: number
+  H_G_m: number
+  H_L_m: number
+  H_OG_m: number
+  lambda_stripping: number
+  Z_htu_ntu_m: number
+  Z_hetp_m: number
+  HETP_m: number
+  kG_a_per_s: number
+  kL_a_per_s: number
+  G_mol_flux: number
+  L_mol_flux: number
+  G_mass_flux: number
+  L_mass_flux: number
+  total_dP_Pa: number | null
+  total_dP_mbar: number | null
+  lines: {
+    x_eq: number[]
+    y_eq: number[]
+    x_op: number[]
+    y_op: number[]
+    x_in: number
+    x_out: number
+  }
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
@@ -71,11 +114,7 @@ function Field({ label, children, hint }: { label: string; children: React.React
 }
 
 function ResultCard({ label, value, unit, highlight = false, warn = false }: {
-  label: string
-  value: string
-  unit?: string
-  highlight?: boolean
-  warn?: boolean
+  label: string; value: string; unit?: string; highlight?: boolean; warn?: boolean
 }) {
   return (
     <div className="panel p-3">
@@ -99,6 +138,8 @@ function PropRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+const ENGINE_URL = 'http://127.0.0.1:8742'
+
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
 interface PackedColumnPageProps {
@@ -114,7 +155,7 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
   const [filterType, setFilterType] = useState<'all' | 'random' | 'structured'>('all')
   const [selectedPacking, setSelectedPacking] = useState<Packing | null>(null)
 
-  // Inputs
+  // Hydraulic inputs
   const [G_mass, setG_mass] = useState('1.0')
   const [L_mass, setL_mass] = useState('3.0')
   const [rho_G, setRho_G] = useState('1.2')
@@ -125,8 +166,18 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
   const [mu_L, setMu_L] = useState('1.0')
   const [sigma, setSigma] = useState('0.072')
 
+  // Mass transfer inputs
+  const [y_in, setY_in] = useState('5.0')
+  const [y_out, setY_out] = useState('0.5')
+  const [m_eq, setM_eq] = useState('0.8')
+  const [G_mol, setG_mol] = useState('40')
+  const [L_mol, setL_mol] = useState('100')
+  const [D_G, setD_G] = useState('1.5e-5')
+  const [D_L, setD_L] = useState('1.5e-9')
+
   // Results
-  const [result, setResult] = useState<HydraulicResult | null>(null)
+  const [hydResult, setHydResult] = useState<HydraulicResult | null>(null)
+  const [mtResult, setMtResult] = useState<MassTransferResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [systemLabel, setSystemLabel] = useState<string | null>(null)
@@ -144,7 +195,6 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
       .map(g => `${g.name} ${g.molPercent}%`)
       .join(', ')
     setSystemLabel(`${mixtureDesc} → Remove ${preset.targetGas} with ${preset.solventName}`)
-    // Clear the preset so it doesn't re-apply on re-renders
     onClearPreset?.()
   }, [preset])
 
@@ -171,14 +221,17 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
     ? packings
     : packings.filter(p => p.type === filterType)
 
-  // Run design calculation
+  // Run both calculations
   async function runDesign() {
     if (!selectedPacking) return
     setLoading(true)
     setError(null)
+    setHydResult(null)
+    setMtResult(null)
 
     try {
-      const res = await fetch('http://127.0.0.1:8742/api/column/hydraulic-design', {
+      // Step 1: Hydraulic design
+      const hydRes = await fetch(`${ENGINE_URL}/api/column/hydraulic-design`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -190,24 +243,72 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
           P_bar: parseFloat(P_bar),
           packing_name: selectedPacking.name,
           flooding_fraction: parseFloat(floodFrac) / 100,
-          mu_L_Pas: parseFloat(mu_L) * 1e-3, // mPa·s → Pa·s
+          mu_L_Pas: parseFloat(mu_L) * 1e-3,
           sigma_Nm: parseFloat(sigma),
         }),
       })
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: res.statusText }))
-        throw new Error(err.detail || `HTTP ${res.status}`)
+      if (!hydRes.ok) {
+        const err = await hydRes.json().catch(() => ({ detail: hydRes.statusText }))
+        throw new Error(err.detail || `Hydraulic: HTTP ${hydRes.status}`)
       }
 
-      const data: HydraulicResult = await res.json()
-      setResult(data)
+      const hydData: HydraulicResult = await hydRes.json()
+      setHydResult(hydData)
+
+      // Step 2: Mass transfer design (uses column area from Step 1)
+      const mtRes = await fetch(`${ENGINE_URL}/api/column/mass-transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          y_in: parseFloat(y_in) / 100,
+          y_out: parseFloat(y_out) / 100,
+          m_equilibrium: parseFloat(m_eq),
+          G_mol_per_s: parseFloat(G_mol),
+          L_mol_per_s: parseFloat(L_mol),
+          A_column_m2: hydData.A_column_m2,
+          packing_name: selectedPacking.name,
+          rho_G_kgm3: parseFloat(rho_G),
+          rho_L_kgm3: parseFloat(rho_L),
+          mu_G_Pas: 1.8e-5,
+          mu_L_Pas: parseFloat(mu_L) * 1e-3,
+          D_G_m2s: parseFloat(D_G),
+          D_L_m2s: parseFloat(D_L),
+          sigma_Nm: parseFloat(sigma),
+          P_total_Pa: parseFloat(P_bar) * 1e5,
+          dP_per_m_Pa: hydData.pressure_drop_Pa_m,
+        }),
+      })
+
+      if (!mtRes.ok) {
+        const err = await mtRes.json().catch(() => ({ detail: mtRes.statusText }))
+        throw new Error(err.detail || `Mass transfer: HTTP ${mtRes.status}`)
+      }
+
+      const mtData: MassTransferResult = await mtRes.json()
+      setMtResult(mtData)
+
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Calculation failed')
     } finally {
       setLoading(false)
     }
   }
+
+  // Prepare chart data
+  const chartData = mtResult?.lines ? (() => {
+    const lines = mtResult.lines
+    const data: { x: number; y_eq: number; y_op: number | null }[] = []
+    const n = lines.x_eq.length
+    for (let i = 0; i < n; i++) {
+      data.push({
+        x: lines.x_eq[i],
+        y_eq: lines.y_eq[i],
+        y_op: i < lines.x_op.length ? lines.y_op[i] : null,
+      })
+    }
+    return data
+  })() : null
 
   return (
     <div className="flex flex-col h-full p-4 gap-4 overflow-auto">
@@ -222,13 +323,13 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
               Packed Column Design
             </h1>
             <p className="text-slate-500 text-xs">
-              Hydraulic sizing — flooding velocity, column diameter, pressure drop
+              Hydraulic sizing + mass transfer — column diameter, packed height, operating lines
             </p>
           </div>
         </div>
       </div>
 
-      {/* System banner — shows when data came from VLE */}
+      {/* System banner */}
       {systemLabel && (
         <div className="panel px-4 py-2 flex items-center gap-3 bg-primary-600/5 border-primary-600/20">
           <FlaskConical size={14} className="text-primary-400" />
@@ -250,7 +351,6 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Left panel: packing selection */}
         <div className="w-72 flex-shrink-0 flex flex-col gap-3 min-h-0">
-          {/* Packing type filter */}
           <div className="panel p-2 flex flex-wrap gap-1">
             {(['all', 'random', 'structured'] as const).map(t => (
               <button
@@ -267,7 +367,6 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
             ))}
           </div>
 
-          {/* Packing list */}
           <div className="panel flex-1 overflow-y-auto min-h-0">
             {packingsLoading ? (
               <div className="flex items-center justify-center py-8 text-slate-500">
@@ -307,7 +406,6 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
             )}
           </div>
 
-          {/* Packing details card */}
           {selectedPacking && (
             <div className="panel p-3 space-y-1">
               <p className="label text-xs mb-2">Packing Properties</p>
@@ -327,214 +425,241 @@ export function PackedColumnPage({ preset, onClearPreset }: PackedColumnPageProp
 
         {/* Right panel: inputs + results */}
         <div className="flex-1 flex flex-col gap-4 min-w-0 min-h-0 overflow-y-auto">
-          {/* Input form */}
-          <div className="panel p-4 space-y-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Info size={14} className="text-slate-500" />
-              <p className="label text-xs">Design Inputs</p>
-            </div>
 
+          {/* Hydraulic Inputs */}
+          <div className="panel p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Info size={14} className="text-slate-500" />
+              <p className="label text-xs">Hydraulic Design</p>
+            </div>
             <div className="grid grid-cols-3 gap-3">
               <Field label="Gas flow rate" hint="kg/s">
-                <input
-                  type="number"
-                  value={G_mass}
-                  onChange={e => setG_mass(e.target.value)}
-                  className="input-field w-full"
-                  step="0.1"
-                />
+                <input type="number" value={G_mass} onChange={e => setG_mass(e.target.value)} className="input-field w-full" step="0.1" />
               </Field>
               <Field label="Liquid flow rate" hint="kg/s">
-                <input
-                  type="number"
-                  value={L_mass}
-                  onChange={e => setL_mass(e.target.value)}
-                  className="input-field w-full"
-                  step="0.1"
-                />
+                <input type="number" value={L_mass} onChange={e => setL_mass(e.target.value)} className="input-field w-full" step="0.1" />
               </Field>
               <Field label="Flooding fraction" hint="%">
-                <input
-                  type="number"
-                  value={floodFrac}
-                  onChange={e => setFloodFrac(e.target.value)}
-                  className="input-field w-full"
-                  min="10"
-                  max="95"
-                  step="5"
-                />
+                <input type="number" value={floodFrac} onChange={e => setFloodFrac(e.target.value)} className="input-field w-full" min="10" max="95" step="5" />
               </Field>
             </div>
-
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Gas density ρ_G" hint="kg/m³">
-                <input
-                  type="number"
-                  value={rho_G}
-                  onChange={e => setRho_G(e.target.value)}
-                  className="input-field w-full"
-                  step="0.1"
-                />
+              <Field label="ρ_G" hint="kg/m³">
+                <input type="number" value={rho_G} onChange={e => setRho_G(e.target.value)} className="input-field w-full" step="0.1" />
               </Field>
-              <Field label="Liquid density ρ_L" hint="kg/m³">
-                <input
-                  type="number"
-                  value={rho_L}
-                  onChange={e => setRho_L(e.target.value)}
-                  className="input-field w-full"
-                  step="1"
-                />
+              <Field label="ρ_L" hint="kg/m³">
+                <input type="number" value={rho_L} onChange={e => setRho_L(e.target.value)} className="input-field w-full" step="1" />
               </Field>
-              <Field label="Liquid viscosity μ_L" hint="mPa·s">
-                <input
-                  type="number"
-                  value={mu_L}
-                  onChange={e => setMu_L(e.target.value)}
-                  className="input-field w-full"
-                  step="0.1"
-                />
+              <Field label="μ_L" hint="mPa·s">
+                <input type="number" value={mu_L} onChange={e => setMu_L(e.target.value)} className="input-field w-full" step="0.1" />
               </Field>
             </div>
-
             <div className="grid grid-cols-3 gap-3">
               <Field label="Temperature" hint="°C">
-                <input
-                  type="number"
-                  value={T_celsius}
-                  onChange={e => setT_celsius(e.target.value)}
-                  className="input-field w-full"
-                />
+                <input type="number" value={T_celsius} onChange={e => setT_celsius(e.target.value)} className="input-field w-full" />
               </Field>
               <Field label="Pressure" hint="bar">
-                <input
-                  type="number"
-                  value={P_bar}
-                  onChange={e => setP_bar(e.target.value)}
-                  className="input-field w-full"
-                  step="0.01"
-                />
+                <input type="number" value={P_bar} onChange={e => setP_bar(e.target.value)} className="input-field w-full" step="0.01" />
               </Field>
-              <Field label="Surface tension σ" hint="N/m">
-                <input
-                  type="number"
-                  value={sigma}
-                  onChange={e => setSigma(e.target.value)}
-                  className="input-field w-full"
-                  step="0.001"
-                />
+              <Field label="σ" hint="N/m">
+                <input type="number" value={sigma} onChange={e => setSigma(e.target.value)} className="input-field w-full" step="0.001" />
               </Field>
             </div>
-
-            <button
-              className="btn-primary w-full flex items-center justify-center gap-2"
-              onClick={runDesign}
-              disabled={loading || !selectedPacking}
-            >
-              {loading ? (
-                <><Loader2 size={14} className="animate-spin" /> Calculating…</>
-              ) : (
-                <><Play size={14} /> Calculate Column Size</>
-              )}
-            </button>
-
-            {error && (
-              <div className="flex items-start gap-2 text-red-400 text-xs bg-red-500/10 p-2 rounded">
-                <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-                {error}
-              </div>
-            )}
           </div>
 
-          {/* Results */}
-          {result && (
+          {/* Mass Transfer Inputs */}
+          <div className="panel p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Ruler size={14} className="text-slate-500" />
+              <p className="label text-xs">Separation & Mass Transfer</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <Field label="Inlet gas y_in" hint="mol%">
+                <input type="number" value={y_in} onChange={e => setY_in(e.target.value)} className="input-field w-full" step="0.1" min="0" />
+              </Field>
+              <Field label="Outlet gas y_out" hint="mol%">
+                <input type="number" value={y_out} onChange={e => setY_out(e.target.value)} className="input-field w-full" step="0.1" min="0" />
+              </Field>
+              <Field label="Equilibrium slope m" hint="y* = m·x">
+                <input type="number" value={m_eq} onChange={e => setM_eq(e.target.value)} className="input-field w-full" step="0.1" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <Field label="G (gas molar)" hint="mol/s">
+                <input type="number" value={G_mol} onChange={e => setG_mol(e.target.value)} className="input-field w-full" step="1" />
+              </Field>
+              <Field label="L (liquid molar)" hint="mol/s">
+                <input type="number" value={L_mol} onChange={e => setL_mol(e.target.value)} className="input-field w-full" step="1" />
+              </Field>
+              <Field label="D_G" hint="m²/s">
+                <input type="text" value={D_G} onChange={e => setD_G(e.target.value)} className="input-field w-full" />
+              </Field>
+              <Field label="D_L" hint="m²/s">
+                <input type="text" value={D_L} onChange={e => setD_L(e.target.value)} className="input-field w-full" />
+              </Field>
+            </div>
+          </div>
+
+          {/* Calculate button */}
+          <button
+            className="btn-primary w-full flex items-center justify-center gap-2"
+            onClick={runDesign}
+            disabled={loading || !selectedPacking}
+          >
+            {loading ? (
+              <><Loader2 size={14} className="animate-spin" /> Calculating…</>
+            ) : (
+              <><Play size={14} /> Calculate Column Design</>
+            )}
+          </button>
+
+          {error && (
+            <div className="flex items-start gap-2 text-red-400 text-xs bg-red-500/10 p-2 rounded">
+              <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
+              {error}
+            </div>
+          )}
+
+          {/* ── Results ── */}
+          {hydResult && mtResult && (
             <div className="space-y-4">
-              {/* Key results cards */}
-              <div className="grid grid-cols-4 gap-3">
+              {/* Headline cards */}
+              <div className="grid grid-cols-5 gap-3">
                 <ResultCard
                   label="Column Diameter"
-                  value={result.D_column_m >= 1
-                    ? result.D_column_m.toFixed(2)
-                    : result.D_column_mm.toFixed(0)
-                  }
-                  unit={result.D_column_m >= 1 ? 'm' : 'mm'}
+                  value={hydResult.D_column_m >= 1
+                    ? hydResult.D_column_m.toFixed(2)
+                    : hydResult.D_column_mm.toFixed(0)}
+                  unit={hydResult.D_column_m >= 1 ? 'm' : 'mm'}
                   highlight
                 />
                 <ResultCard
-                  label="Flooding Velocity"
-                  value={result.u_flood_ms.toFixed(2)}
-                  unit="m/s"
+                  label="Packed Height (HTU×NTU)"
+                  value={mtResult.Z_htu_ntu_m.toFixed(2)}
+                  unit="m"
+                  highlight
                 />
                 <ResultCard
-                  label="Design Velocity"
-                  value={result.u_design_ms.toFixed(2)}
-                  unit="m/s"
+                  label="Packed Height (HETP)"
+                  value={mtResult.Z_hetp_m.toFixed(2)}
+                  unit="m"
                 />
                 <ResultCard
-                  label="Pressure Drop"
-                  value={result.pressure_drop_Pa_m.toFixed(1)}
-                  unit="Pa/m"
+                  label="Removal"
+                  value={mtResult.removal_percent.toFixed(1)}
+                  unit="%"
+                />
+                <ResultCard
+                  label="Total ΔP"
+                  value={mtResult.total_dP_mbar !== null ? mtResult.total_dP_mbar.toFixed(1) : '—'}
+                  unit="mbar"
                 />
               </div>
 
-              {/* Detailed results */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Hydraulic summary */}
+              {/* Detail panels */}
+              <div className="grid grid-cols-3 gap-4">
+                {/* Hydraulic */}
                 <div className="panel p-4 space-y-2">
                   <p className="label text-xs mb-2">Hydraulic Summary</p>
-                  <PropRow label="Packing" value={result.packing_name} />
-                  <PropRow label="Flow parameter X" value={result.flow_parameter_X.toFixed(4)} />
-                  <PropRow label="Flooding velocity" value={`${result.u_flood_ms.toFixed(3)} m/s`} />
-                  <PropRow label="Flooding fraction" value={`${(result.flooding_fraction * 100).toFixed(0)}%`} />
-                  <PropRow label="Design velocity" value={`${result.u_design_ms.toFixed(3)} m/s`} />
-                  <PropRow label="Column area" value={`${result.A_column_m2.toFixed(4)} m²`} />
-                  <PropRow label="Column diameter" value={`${result.D_column_m.toFixed(4)} m (${result.D_column_mm.toFixed(0)} mm)`} />
-                  <PropRow label="ΔP/Z" value={`${result.pressure_drop_Pa_m.toFixed(1)} Pa/m (${result.pressure_drop_mbar_m.toFixed(2)} mbar/m)`} />
-                </div>
-
-                {/* Wetting & conditions */}
-                <div className="panel p-4 space-y-2">
-                  <p className="label text-xs mb-2">Operating Conditions</p>
-                  <PropRow label="Temperature" value={`${result.T_celsius} °C`} />
-                  <PropRow label="Pressure" value={`${result.P_bar.toFixed(4)} bar`} />
-                  <PropRow label="Gas flow (G)" value={`${result.G_mass_kgs} kg/s`} />
-                  <PropRow label="Liquid flow (L)" value={`${result.L_mass_kgs} kg/s`} />
-                  <PropRow label="L/G mass ratio" value={(result.L_mass_kgs / result.G_mass_kgs).toFixed(2)} />
-                  <PropRow label="ρ_G" value={`${result.rho_G_kgm3} kg/m³`} />
-                  <PropRow label="ρ_L" value={`${result.rho_L_kgm3} kg/m³`} />
-
-                  {/* Wetting check */}
-                  <div className="mt-3 pt-2 border-t border-surface-700/50">
-                    <div className={`flex items-center gap-2 text-xs ${
-                      result.wetting_adequate ? 'text-emerald-400' : 'text-amber-400'
-                    }`}>
-                      {result.wetting_adequate ? (
-                        <CheckCircle2 size={14} />
-                      ) : (
-                        <AlertTriangle size={14} />
-                      )}
-                      <span>
-                        {result.wetting_adequate
-                          ? 'Wetting adequate'
-                          : 'Warning: below minimum wetting rate'}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-[10px] text-slate-600">
-                      MWR: {result.min_wetting_rate_m3m2s.toExponential(2)} m³/(m²·s) ·
-                      Actual: {result.actual_liquid_vel_m3m2s.toExponential(2)} m³/(m²·s)
+                  <PropRow label="Packing" value={hydResult.packing_name} />
+                  <PropRow label="Flow parameter X" value={hydResult.flow_parameter_X.toFixed(4)} />
+                  <PropRow label="Flooding velocity" value={`${hydResult.u_flood_ms.toFixed(3)} m/s`} />
+                  <PropRow label="Flooding fraction" value={`${(hydResult.flooding_fraction * 100).toFixed(0)}%`} />
+                  <PropRow label="Design velocity" value={`${hydResult.u_design_ms.toFixed(3)} m/s`} />
+                  <PropRow label="Column area" value={`${hydResult.A_column_m2.toFixed(4)} m²`} />
+                  <PropRow label="Column diameter" value={`${hydResult.D_column_m.toFixed(3)} m (${hydResult.D_column_mm.toFixed(0)} mm)`} />
+                  <PropRow label="ΔP/Z" value={`${hydResult.pressure_drop_Pa_m.toFixed(1)} Pa/m`} />
+                  <div className="mt-2 pt-2 border-t border-surface-700/50">
+                    <div className={`flex items-center gap-2 text-xs ${hydResult.wetting_adequate ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {hydResult.wetting_adequate ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                      <span>{hydResult.wetting_adequate ? 'Wetting adequate' : 'Below min. wetting rate'}</span>
                     </div>
                   </div>
                 </div>
+
+                {/* Mass transfer */}
+                <div className="panel p-4 space-y-2">
+                  <p className="label text-xs mb-2">Mass Transfer</p>
+                  <PropRow label="Absorption factor A" value={mtResult.absorption_factor_A.toFixed(3)} />
+                  <PropRow label="N_OG (transfer units)" value={mtResult.N_OG.toFixed(3)} />
+                  <PropRow label="H_G (gas HTU)" value={`${mtResult.H_G_m.toFixed(3)} m`} />
+                  <PropRow label="H_L (liquid HTU)" value={`${mtResult.H_L_m.toFixed(3)} m`} />
+                  <PropRow label="H_OG (overall HTU)" value={`${mtResult.H_OG_m.toFixed(3)} m`} />
+                  <PropRow label="λ (stripping factor)" value={mtResult.lambda_stripping.toFixed(4)} />
+                  <PropRow label="kG·a" value={`${mtResult.kG_a_per_s.toFixed(2)} s⁻¹`} />
+                  <PropRow label="kL·a" value={`${mtResult.kL_a_per_s.toFixed(4)} s⁻¹`} />
+                  <div className="mt-2 pt-2 border-t border-surface-700/50">
+                    <div className={`flex items-center gap-2 text-xs ${mtResult.absorption_factor_A > 1.0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {mtResult.absorption_factor_A > 1.0 ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+                      <span>{mtResult.absorption_factor_A > 1.0 ? 'A > 1 — absorption feasible' : 'A < 1 — increase L/G'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Column dimensions */}
+                <div className="panel p-4 space-y-2">
+                  <p className="label text-xs mb-2">Column Dimensions</p>
+                  <PropRow label="Diameter" value={`${hydResult.D_column_m.toFixed(3)} m`} />
+                  <PropRow label="Height (HTU×NTU)" value={`${mtResult.Z_htu_ntu_m.toFixed(3)} m`} />
+                  <PropRow label="Height (HETP)" value={`${mtResult.Z_hetp_m.toFixed(3)} m`} />
+                  <PropRow label="HETP" value={`${mtResult.HETP_m} m`} />
+                  <PropRow label="Aspect ratio H/D" value={
+                    hydResult.D_column_m > 0 ? (mtResult.Z_htu_ntu_m / hydResult.D_column_m).toFixed(1) : '—'
+                  } />
+                  <PropRow label="Total ΔP" value={
+                    mtResult.total_dP_Pa !== null
+                      ? `${mtResult.total_dP_Pa.toFixed(1)} Pa (${mtResult.total_dP_mbar?.toFixed(2)} mbar)`
+                      : '—'
+                  } />
+                  <div className="mt-2 pt-2 border-t border-surface-700/50 text-[10px] text-slate-600">
+                    <p>Gas flux: {mtResult.G_mass_flux.toFixed(2)} kg/(m²·s)</p>
+                    <p>Liquid flux: {mtResult.L_mass_flux.toFixed(2)} kg/(m²·s)</p>
+                  </div>
+                </div>
               </div>
+
+              {/* x-y diagram */}
+              {chartData && (
+                <div className="panel p-4">
+                  <p className="label text-xs mb-3">Operating & Equilibrium Lines (x-y diagram)</p>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <LineChart data={chartData} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                      <XAxis
+                        dataKey="x" type="number"
+                        label={{ value: 'x (liquid mole fraction)', position: 'bottom', offset: -2, fill: '#94a3b8', fontSize: 11 }}
+                        tick={{ fill: '#94a3b8', fontSize: 10 }}
+                        stroke="#475569"
+                        tickFormatter={(v: number) => v.toFixed(3)}
+                      />
+                      <YAxis
+                        label={{ value: 'y (gas mole fraction)', angle: -90, position: 'insideLeft', offset: 10, fill: '#94a3b8', fontSize: 11 }}
+                        tick={{ fill: '#94a3b8', fontSize: 10 }}
+                        stroke="#475569"
+                        tickFormatter={(v: number) => v.toFixed(3)}
+                      />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }}
+                        labelFormatter={(v: number) => `x = ${v.toFixed(4)}`}
+                        formatter={(v: number, name: string) => [v.toFixed(4), name]}
+                      />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Line name="Equilibrium (y* = mx)" dataKey="y_eq" stroke="#f59e0b" dot={false} strokeWidth={2} />
+                      <Line name="Operating line" dataKey="y_op" stroke="#3b82f6" dot={false} strokeWidth={2} connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </div>
           )}
 
           {/* Empty state */}
-          {!result && !loading && !error && (
+          {!hydResult && !loading && !error && (
             <div className="flex-1 flex items-center justify-center panel">
               <div className="text-center text-slate-500 py-12">
                 <Columns size={32} className="mx-auto mb-3 opacity-30" />
                 <p className="text-sm">Select a packing and enter design parameters</p>
-                <p className="text-xs mt-1">Results will appear here after calculation</p>
+                <p className="text-xs mt-1">Hydraulic sizing + mass transfer in one calculation</p>
               </div>
             </div>
           )}

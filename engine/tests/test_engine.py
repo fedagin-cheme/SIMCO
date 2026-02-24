@@ -534,3 +534,144 @@ class TestColumnHydraulics:
         )
         assert result["packing_name"] == "Mellapak 250Y"
         assert result["D_column_m"] > 0
+
+
+# ─── Mass Transfer Tests ──────────────────────────────────────────────────
+
+from engine.thermo.mass_transfer import (
+    kremser_NTU,
+    absorption_factor,
+    hetp_height,
+    onda_kG_a,
+    onda_kL_a,
+    overall_HTU,
+    design_packed_height,
+    operating_equilibrium_lines,
+)
+
+
+class TestMassTransfer:
+    """Tests for packed column mass transfer calculations."""
+
+    def test_kremser_ntu_basic(self):
+        """90% removal with A=1.5 → N_OG ≈ 4.5 (textbook example)."""
+        # y_in=0.10, y_out=0.01, A=1.5
+        N = kremser_NTU(0.10, 0.01, 1.5)
+        assert 3.0 < N < 7.0, f"N_OG={N:.2f}, expected ~4-5 for 90% removal"
+
+    def test_kremser_ntu_high_A(self):
+        """High A (easy absorption) → fewer transfer units."""
+        N_low_A = kremser_NTU(0.10, 0.01, 1.2)
+        N_high_A = kremser_NTU(0.10, 0.01, 3.0)
+        assert N_high_A < N_low_A, "Higher A should give fewer NTU"
+
+    def test_kremser_ntu_A_equals_1(self):
+        """Special case A=1: N_OG = y_in/y_out - 1."""
+        N = kremser_NTU(0.10, 0.01, 1.0)
+        expected = 0.10 / 0.01 - 1.0  # = 9.0
+        assert abs(N - expected) < 0.1, f"A=1: N_OG={N:.2f}, expected {expected}"
+
+    def test_kremser_ntu_99_removal(self):
+        """99% removal needs more transfer units than 90%."""
+        N_90 = kremser_NTU(0.10, 0.01, 1.5)
+        N_99 = kremser_NTU(0.10, 0.001, 1.5)
+        assert N_99 > N_90
+
+    def test_absorption_factor(self):
+        """A = L/(m·G) basic check."""
+        A = absorption_factor(L_mol=100.0, G_mol=50.0, m=1.0)
+        assert abs(A - 2.0) < 0.001
+
+    def test_hetp_height(self):
+        """Z = 5 stages × 0.4 m = 2.0 m."""
+        Z = hetp_height(5.0, 0.4)
+        assert abs(Z - 2.0) < 0.001
+
+    def test_onda_kG_a_positive(self):
+        """Gas-phase mass transfer coefficient should be positive."""
+        kG_a = onda_kG_a(
+            G_mass_flux=1.0, a_p=200, D_G=1.5e-5,
+            mu_G=1.8e-5, rho_G=1.2,
+        )
+        assert kG_a > 0
+
+    def test_onda_kG_a_order_of_magnitude(self):
+        """kG·a typically 0.01–10 s⁻¹ for packed columns."""
+        kG_a = onda_kG_a(
+            G_mass_flux=1.5, a_p=250, D_G=1.5e-5,
+            mu_G=1.8e-5, rho_G=1.2,
+        )
+        assert 0.001 < kG_a < 100, f"kG_a={kG_a}, outside expected range"
+
+    def test_onda_kL_a_positive(self):
+        """Liquid-phase mass transfer coefficient should be positive."""
+        kL_a = onda_kL_a(
+            L_mass_flux=5.0, a_p=250, D_L=1.5e-9,
+            mu_L=1e-3, rho_L=998.0,
+        )
+        assert kL_a > 0
+
+    def test_overall_htu_reasonable(self):
+        """H_OG typically 0.3–3.0 m for gas absorption."""
+        htu = overall_HTU(
+            G_mol_flux=40.0, L_mol_flux=200.0, m=0.8,
+            kG_a=0.5, kL_a=0.01,
+        )
+        assert 0.05 < htu["H_OG_m"] < 10.0, f"H_OG={htu['H_OG_m']}"
+
+    def test_operating_lines_shape(self):
+        """Operating and equilibrium lines should have correct shape."""
+        lines = operating_equilibrium_lines(
+            y_in=0.10, y_out=0.01, m=1.0, A=1.5,
+        )
+        assert len(lines["x_eq"]) == 51
+        assert len(lines["y_op"]) == 51
+        # Equilibrium line starts at origin
+        assert abs(lines["y_eq"][0]) < 1e-10
+        # Operating line starts at (x_out, y_out)
+        assert abs(lines["y_op"][0] - 0.01) < 1e-6
+        # Operating line ends at (x_in, y_in)
+        assert abs(lines["y_op"][-1] - 0.10) < 0.001
+
+    def test_design_packed_height_integration(self):
+        """Full mass transfer design should produce consistent results."""
+        packing = {
+            "name": "Mellapak 250Y",
+            "type": "structured",
+            "packing_factor": 66,
+            "specific_area": 250,
+            "void_fraction": 0.98,
+            "hetp": 0.35,
+        }
+        result = design_packed_height(
+            y_in=0.05, y_out=0.005,  # 90% removal
+            m=0.8,
+            G_mol=40.0, L_mol=100.0,
+            A_column=0.5,
+            packing=packing,
+            dP_per_m=15.0,
+        )
+        assert result["removal_percent"] == 90.0
+        assert result["Z_htu_ntu_m"] > 0
+        assert result["Z_hetp_m"] > 0
+        assert result["N_OG"] > 0
+        assert result["absorption_factor_A"] > 1.0  # feasible absorption
+        assert result["total_dP_Pa"] > 0
+        assert "lines" in result
+
+    def test_design_packed_height_with_db_packing(self):
+        """Design with actual packing from JSON database."""
+        from engine.database.db import get_db
+        db = get_db()
+        packing = db.get_packing("Pall Ring 50mm")
+        assert packing is not None
+
+        result = design_packed_height(
+            y_in=0.10, y_out=0.01,
+            m=1.0,
+            G_mol=30.0, L_mol=100.0,
+            A_column=0.5,
+            packing=packing,
+        )
+        assert result["Z_htu_ntu_m"] > 0
+        assert result["absorption_factor_A"] > 0

@@ -328,3 +328,84 @@ def hydraulic_design(req: HydraulicDesignRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Mass Transfer Endpoints ────────────────────────────────────────────────
+
+from engine.thermo.mass_transfer import (
+    design_packed_height,
+    hetp_height as calc_hetp_height,
+)
+
+
+class HETPHeightRequest(BaseModel):
+    N_stages: float
+    packing_name: str
+
+
+@app.post("/api/column/hetp-height")
+def hetp_height_endpoint(req: HETPHeightRequest):
+    """Simple packed height from N_stages × HETP."""
+    db = get_db()
+    packing = db.get_packing(req.packing_name)
+    if packing is None:
+        raise HTTPException(status_code=404, detail=f"Packing '{req.packing_name}' not found")
+    Z = calc_hetp_height(req.N_stages, packing["hetp"])
+    return {
+        "N_stages": req.N_stages,
+        "HETP_m": packing["hetp"],
+        "Z_m": round(Z, 3),
+        "packing_name": packing["name"],
+    }
+
+
+class MassTransferRequest(BaseModel):
+    y_in: float
+    y_out: float
+    m_equilibrium: float
+    G_mol_per_s: float
+    L_mol_per_s: float
+    A_column_m2: float
+    packing_name: str
+    rho_G_kgm3: float = 1.2
+    rho_L_kgm3: float = 998.0
+    mu_G_Pas: float = 1.8e-5
+    mu_L_Pas: float = 1.0e-3
+    D_G_m2s: float = 1.5e-5
+    D_L_m2s: float = 1.5e-9
+    sigma_Nm: float = 0.072
+    P_total_Pa: float = 101325.0
+    dP_per_m_Pa: Optional[float] = None
+
+
+@app.post("/api/column/mass-transfer")
+def mass_transfer_endpoint(req: MassTransferRequest):
+    """Full mass transfer design: NTU, HTU, packed height, operating lines."""
+    db = get_db()
+    packing = db.get_packing(req.packing_name)
+    if packing is None:
+        raise HTTPException(status_code=404, detail=f"Packing '{req.packing_name}' not found")
+    try:
+        result = design_packed_height(
+            y_in=req.y_in,
+            y_out=req.y_out,
+            m=req.m_equilibrium,
+            G_mol=req.G_mol_per_s,
+            L_mol=req.L_mol_per_s,
+            A_column=req.A_column_m2,
+            packing=packing,
+            rho_G=req.rho_G_kgm3,
+            rho_L=req.rho_L_kgm3,
+            mu_G=req.mu_G_Pas,
+            mu_L=req.mu_L_Pas,
+            D_G=req.D_G_m2s,
+            D_L=req.D_L_m2s,
+            sigma=req.sigma_Nm,
+            P_total=req.P_total_Pa,
+            dP_per_m=req.dP_per_m_Pa,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
