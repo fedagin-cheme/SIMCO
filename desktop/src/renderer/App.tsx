@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { TitleBar } from './components/TitleBar'
 import { Sidebar, Page } from './components/Sidebar'
 import { VLECalculatorPage } from './pages/VLECalculatorPage'
+import { PackedColumnPage } from './pages/PackedColumnPage'
 import { ComingSoonPage } from './pages/ComingSoonPage'
 import { checkEngineHealth } from './hooks/useEngine'
 
@@ -31,13 +32,7 @@ export default function App() {
       case 'vle-calculator':
         return <VLECalculatorPage />
       case 'packed-column':
-        return (
-          <ComingSoonPage
-            title="Packed Column Design"
-            phase="Phase 3"
-            description="HTU-NTU, HETP, flooding analysis, rate-based sizing. Coming after VLE foundation is complete."
-          />
-        )
+        return <PackedColumnPage />
       case 'tray-column':
         return (
           <ComingSoonPage
