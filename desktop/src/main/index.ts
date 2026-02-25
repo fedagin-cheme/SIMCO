@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, exec, ChildProcess } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -46,19 +46,20 @@ function createWindow() {
 }
 
 // ─── Python Engine ────────────────────────────────────────────────────────────
-function startEngine() {
-  // In development: assumes uvicorn is already running (started manually)
-  // In production: spawns the bundled Python executable
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Engine] Dev mode — expecting engine on port', ENGINE_PORT)
-    engineReady = true
-    return
-  }
+function spawnEngine() {
+  const isDev = process.env.NODE_ENV === 'development'
+  const enginePath = isDev
+    ? 'uvicorn'
+    : join(process.resourcesPath, 'engine', 'simco-engine')
+  const engineArgs = isDev
+    ? ['api.server:app', '--host', ENGINE_HOST, '--port', String(ENGINE_PORT)]
+    : ['--port', String(ENGINE_PORT)]
+  const engineCwd = isDev ? join(app.getAppPath(), '..', 'engine') : undefined
 
-  const enginePath = join(process.resourcesPath, 'engine', 'simco-engine')
-  console.log('[Engine] Starting:', enginePath)
+  console.log('[Engine] Starting:', enginePath, engineArgs.join(' '))
 
-  engineProcess = spawn(enginePath, ['--port', String(ENGINE_PORT)], {
+  engineProcess = spawn(enginePath, engineArgs, {
+    cwd: engineCwd,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
@@ -72,7 +73,13 @@ function startEngine() {
   })
 
   engineProcess.stderr?.on('data', (data: Buffer) => {
-    console.error('[Engine ERROR]', data.toString())
+    const msg = data.toString()
+    console.error('[Engine]', msg)
+    // uvicorn logs startup message to stderr
+    if (msg.includes('Application startup complete')) {
+      engineReady = true
+      mainWindow?.webContents.send('engine:ready')
+    }
   })
 
   engineProcess.on('exit', (code) => {
@@ -80,6 +87,15 @@ function startEngine() {
     engineReady = false
     mainWindow?.webContents.send('engine:offline')
   })
+}
+
+function startEngine() {
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Engine] Dev mode — expecting engine on port', ENGINE_PORT)
+    engineReady = true
+    return
+  }
+  spawnEngine()
 }
 
 function stopEngine() {
@@ -96,6 +112,20 @@ ipcMain.handle('engine:status', () => ({
 }))
 
 ipcMain.handle('engine:url', () => `http://${ENGINE_HOST}:${ENGINE_PORT}`)
+
+ipcMain.handle('engine:restart', async () => {
+  console.log('[Engine] Restart requested')
+  engineReady = false
+  mainWindow?.webContents.send('engine:offline')
+  stopEngine()
+  // Kill any process on the port (covers externally-started dev engines)
+  await new Promise<void>((resolve) => {
+    exec(`fuser -k ${ENGINE_PORT}/tcp`, () => resolve())
+  })
+  await new Promise((r) => setTimeout(r, 500))
+  spawnEngine()
+  return { ok: true }
+})
 
 // Window controls
 ipcMain.on('window:minimize', () => mainWindow?.minimize())
