@@ -314,18 +314,20 @@ export function PackedColumnPage() {
                 ))}
               </div>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
               {packingsLoading ? (
                 <div className="text-slate-500 text-xs py-2"><Loader2 size={12} className="animate-spin inline mr-1" />Loading…</div>
               ) : filteredPackings.map(p => (
                 <button key={p.name} onClick={() => setSelectedPacking(p)}
-                  className={`flex-shrink-0 px-3 py-2 rounded-lg border text-left transition-colors ${
+                  className={`w-full px-3 py-1.5 rounded-lg border text-left transition-colors ${
                     selectedPacking?.name === p.name
                       ? 'border-primary-500 bg-primary-600/10'
                       : 'border-surface-600 hover:border-surface-500 bg-surface-800/50'
                   }`}>
-                  <p className={`text-xs font-medium ${selectedPacking?.name === p.name ? 'text-primary-400' : 'text-slate-200'}`}>{p.name}</p>
-                  <p className="text-[10px] text-slate-500">{p.type} · F<sub>p</sub>={p.packing_factor} · HETP={p.hetp}m</p>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs font-medium ${selectedPacking?.name === p.name ? 'text-primary-400' : 'text-slate-200'}`}>{p.name}</p>
+                    <p className="text-[10px] text-slate-500">{p.type} · F<sub>p</sub>={p.packing_factor} · HETP={p.hetp}m</p>
+                  </div>
                 </button>
               ))}
             </div>
