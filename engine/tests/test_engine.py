@@ -540,6 +540,7 @@ class TestColumnHydraulics:
 
 from engine.thermo.mass_transfer import (
     kremser_NTU,
+    kremser_y_out,
     absorption_factor,
     hetp_height,
     onda_kG_a,
@@ -676,6 +677,27 @@ class TestMassTransfer:
         assert result["Z_htu_ntu_m"] > 0
         assert result["absorption_factor_A"] > 0
 
+    # ── Kremser inverse (kremser_y_out) tests ──
+
+    def test_kremser_y_out_roundtrip(self):
+        """kremser_y_out should be the exact inverse of kremser_NTU."""
+        y_in, y_out_expected, A = 0.10, 0.01, 2.0
+        NTU = kremser_NTU(y_in, y_out_expected, A)
+        y_out_recovered = kremser_y_out(y_in, A, NTU)
+        assert abs(y_out_recovered - y_out_expected) < 1e-8
+
+    def test_kremser_y_out_A_equals_1(self):
+        """Special case A=1: y_out = y_in / (1 + NTU)."""
+        y_out = kremser_y_out(0.10, 1.0, 9.0)
+        assert abs(y_out - 0.01) < 1e-8
+
+    def test_kremser_roundtrip_various_A(self):
+        """Roundtrip NTU → y_out for several A values where 90% removal is feasible."""
+        for A in [1.0, 1.2, 1.5, 2.0, 5.0]:
+            NTU = kremser_NTU(0.10, 0.01, A)
+            y_out = kremser_y_out(0.10, A, NTU)
+            assert abs(y_out - 0.01) < 1e-6, f"Roundtrip failed for A={A}: y_out={y_out}"
+
 
 # ─── Scrubber Design Tests ────────────────────────────────────────────────
 
@@ -793,3 +815,126 @@ class TestScrubber:
         assert "exit_gas" in data
         assert "Z_design_m" in data
         assert data["D_column_mm"] > 0
+
+    # ── DOF solve mode tests ──
+
+    def test_solve_for_Z_default_backward_compat(self):
+        """Default solve_for='Z' should produce results with solve_mode='Z'."""
+        result = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            removal_target_pct=90.0,
+            G_mass_kgs=1.0, L_mass_kgs=20.0,
+            rho_L_kgm3=1012,
+            solve_for="Z",
+        )
+        assert result["solve_mode"] == "Z"
+        assert result["Z_design_m"] > 0
+        assert result["D_column_mm"] > 0
+
+    def test_solve_for_eta_mode(self):
+        """Mode 2: Given L + Z, compute removal. Cross-validate with Mode 1."""
+        # Run Mode 1 to get a reference Z
+        result_mode1 = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            removal_target_pct=90.0,
+            G_mass_kgs=1.0, L_mass_kgs=20.0,
+            rho_L_kgm3=1012,
+        )
+        Z_from_mode1 = result_mode1["Z_design_m"]
+
+        # Run Mode 2 with the same L and the Z from Mode 1
+        result_mode2 = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            G_mass_kgs=1.0, L_mass_kgs=20.0,
+            rho_L_kgm3=1012,
+            solve_for="eta",
+            Z_packed_m=Z_from_mode1,
+        )
+        assert result_mode2["solve_mode"] == "eta"
+        # Should recover ~90% removal for the dominant component
+        co2_removal = next(g for g in result_mode2["exit_gas"] if "dioxide" in g["name"].lower())["removal_pct"]
+        assert abs(co2_removal - 90.0) < 2.0, f"Expected ~90% removal, got {co2_removal}%"
+
+    def test_solve_for_L_mode(self):
+        """Mode 3: Given η + Z, compute L via bisection. Cross-validate with Mode 1."""
+        # Run Mode 1 to get reference Z at L=20
+        result_mode1 = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            removal_target_pct=90.0,
+            G_mass_kgs=1.0, L_mass_kgs=20.0,
+            rho_L_kgm3=1012,
+        )
+        Z_ref = result_mode1["Z_design_m"]
+
+        # Run Mode 3 with η=90% and Z from Mode 1
+        result_mode3 = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            removal_target_pct=90.0,
+            G_mass_kgs=1.0,
+            rho_L_kgm3=1012,
+            solve_for="L",
+            Z_packed_m=Z_ref,
+        )
+        assert result_mode3["solve_mode"] == "L"
+        assert result_mode3["bisection_converged"] is True
+        # Should recover ~20 kg/s
+        computed_L = result_mode3["computed_L_kgs"]
+        assert abs(computed_L - 20.0) / 20.0 < 0.05, f"Expected ~20 kg/s, got {computed_L}"
+
+    def test_solve_for_eta_with_shorter_column(self):
+        """Mode 2: halving the column height should reduce removal."""
+        # First get the reference Z for 90% removal
+        ref = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            removal_target_pct=90.0,
+            G_mass_kgs=1.0, L_mass_kgs=20.0,
+            rho_L_kgm3=1012,
+        )
+        Z_ref = ref["Z_design_m"]
+
+        # Use half the height — should give less removal
+        result = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            G_mass_kgs=1.0, L_mass_kgs=20.0,
+            rho_L_kgm3=1012,
+            solve_for="eta",
+            Z_packed_m=Z_ref * 0.5,
+        )
+        co2_removal = next(g for g in result["exit_gas"] if "dioxide" in g["name"].lower())["removal_pct"]
+        assert co2_removal < 90.0, f"Halved column should give <90% removal, got {co2_removal}%"
+        assert co2_removal > 0.0, "Some removal should still occur"

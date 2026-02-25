@@ -104,6 +104,39 @@ def kremser_NTU(y_in: float, y_out: float, A: float) -> float:
     return math.log(arg) / math.log(A)
 
 
+def kremser_y_out(y_in: float, A: float, NTU: float) -> float:
+    """Back-calculate outlet gas mole fraction from Kremser equation.
+
+    Inverse of kremser_NTU: given y_in, absorption factor A, and number
+    of transfer units NTU, compute y_out.
+
+    Parameters
+    ----------
+    y_in : float
+        Inlet gas mole fraction of solute.
+    A : float
+        Absorption factor L_mol / (m * G_mol).
+    NTU : float
+        Number of overall gas-phase transfer units N_OG.
+
+    Returns
+    -------
+    float
+        Outlet gas mole fraction y_out.
+    """
+    if y_in <= 0:
+        raise ValueError(f"y_in must be positive, got {y_in}")
+    if A <= 0:
+        raise ValueError(f"Absorption factor must be positive, got {A}")
+    if NTU < 0:
+        raise ValueError(f"NTU must be non-negative, got {NTU}")
+
+    if abs(A - 1.0) < 1e-6:
+        return y_in / (1.0 + NTU)
+
+    return y_in * (A - 1.0) / (A ** (NTU + 1.0) - 1.0)
+
+
 def absorption_factor(L_mol: float, G_mol: float, m: float) -> float:
     """Absorption factor A = L / (m · G).
 
