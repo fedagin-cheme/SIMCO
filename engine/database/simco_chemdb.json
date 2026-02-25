@@ -4603,5 +4603,111 @@
       "hetp": 0.5,
       "source": "Perry's"
     }
+  ],
+  "absorption_kinetics": [
+    {
+      "acid_gas": "CO2",
+      "solvent": "MEA",
+      "description": "CO2 absorption in aqueous MEA \u2014 fast pseudo-first-order",
+      "k2_m3_mol_s": 6000.0,
+      "k2_T_ref_K": 298.15,
+      "Ea_J_mol": 41000.0,
+      "enhancement_factor_E": 300.0,
+      "E_notes": "E=200-500 typical for 30wt% MEA at 40\u00b0C with low CO2 loading. Conservative estimate.",
+      "D_G_m2s": 1.6e-05,
+      "D_L_m2s": 1.5e-09,
+      "source": "Versteeg1996, Hikita1979"
+    },
+    {
+      "acid_gas": "CO2",
+      "solvent": "MDEA",
+      "description": "CO2 absorption in aqueous MDEA \u2014 slow reaction, base-catalyzed hydration",
+      "k2_m3_mol_s": 5.5,
+      "k2_T_ref_K": 298.15,
+      "Ea_J_mol": 43000.0,
+      "enhancement_factor_E": 3.0,
+      "E_notes": "Low E for CO2-MDEA; selective for H2S over CO2",
+      "D_G_m2s": 1.6e-05,
+      "D_L_m2s": 1.2e-09,
+      "source": "Versteeg1996"
+    },
+    {
+      "acid_gas": "H2S",
+      "solvent": "MEA",
+      "description": "H2S absorption in aqueous MEA \u2014 instantaneous proton transfer",
+      "k2_m3_mol_s": 100000000.0,
+      "k2_T_ref_K": 298.15,
+      "Ea_J_mol": 10000.0,
+      "enhancement_factor_E": 500.0,
+      "E_notes": "Instantaneous reaction; E >> 1",
+      "D_G_m2s": 1.8e-05,
+      "D_L_m2s": 1.6e-09,
+      "source": "Danckwerts1970"
+    },
+    {
+      "acid_gas": "H2S",
+      "solvent": "MDEA",
+      "description": "H2S absorption in aqueous MDEA \u2014 instantaneous proton transfer",
+      "k2_m3_mol_s": 100000000.0,
+      "k2_T_ref_K": 298.15,
+      "Ea_J_mol": 10000.0,
+      "enhancement_factor_E": 500.0,
+      "E_notes": "Instantaneous; MDEA selective for H2S",
+      "D_G_m2s": 1.8e-05,
+      "D_L_m2s": 1.6e-09,
+      "source": "Danckwerts1970"
+    },
+    {
+      "acid_gas": "SO2",
+      "solvent": "H2O",
+      "description": "SO2 absorption in water \u2014 physical + hydration",
+      "k2_m3_mol_s": 0.0,
+      "k2_T_ref_K": 298.15,
+      "Ea_J_mol": 0.0,
+      "enhancement_factor_E": 1.0,
+      "E_notes": "Physical absorption; SO2 is moderately soluble",
+      "D_G_m2s": 1.3e-05,
+      "D_L_m2s": 1.5e-09,
+      "source": "Perry8th"
+    },
+    {
+      "acid_gas": "NH3",
+      "solvent": "H2O",
+      "description": "NH3 absorption in water \u2014 physical, very soluble",
+      "k2_m3_mol_s": 0.0,
+      "k2_T_ref_K": 298.15,
+      "Ea_J_mol": 0.0,
+      "enhancement_factor_E": 1.0,
+      "E_notes": "Physical absorption; NH3 highly soluble in water",
+      "D_G_m2s": 2.2e-05,
+      "D_L_m2s": 2e-09,
+      "source": "Perry8th"
+    },
+    {
+      "acid_gas": "CO2",
+      "solvent": "H2O",
+      "description": "CO2 absorption in water \u2014 physical only",
+      "k2_m3_mol_s": 0.0,
+      "k2_T_ref_K": 298.15,
+      "Ea_J_mol": 0.0,
+      "enhancement_factor_E": 1.0,
+      "E_notes": "No chemical reaction; low solubility",
+      "D_G_m2s": 1.6e-05,
+      "D_L_m2s": 1.5e-09,
+      "source": "Perry8th"
+    },
+    {
+      "acid_gas": "H2S",
+      "solvent": "H2O",
+      "description": "H2S absorption in water \u2014 physical",
+      "k2_m3_mol_s": 0.0,
+      "k2_T_ref_K": 298.15,
+      "Ea_J_mol": 0.0,
+      "enhancement_factor_E": 1.0,
+      "E_notes": "Physical absorption",
+      "D_G_m2s": 1.8e-05,
+      "D_L_m2s": 1.6e-09,
+      "source": "Perry8th"
+    }
   ]
 }

@@ -409,3 +409,53 @@ def mass_transfer_endpoint(req: MassTransferRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ─── Scrubber Design Endpoint ───────────────────────────────────────────────
+
+from engine.thermo.scrubber import design_scrubber
+
+
+class GasComponent(BaseModel):
+    name: str
+    mol_percent: float
+
+
+class ScrubberDesignRequest(BaseModel):
+    gas_mixture: list[GasComponent]
+    solvent_name: str
+    packing_name: str
+    removal_target_pct: float = 90.0
+    G_mass_kgs: float = 1.0
+    L_mass_kgs: float = 3.0
+    T_celsius: float = 40.0
+    P_bar: float = 1.01325
+    flooding_fraction: float = 0.70
+    mu_L_Pas: float = 1.0e-3
+    sigma_Nm: float = 0.072
+    rho_L_kgm3: float = 998.0
+
+
+@app.post("/api/column/scrubber-design")
+def scrubber_design_endpoint(req: ScrubberDesignRequest):
+    """Multi-component gas scrubber design."""
+    try:
+        result = design_scrubber(
+            gas_mixture=[{"name": g.name, "mol_percent": g.mol_percent} for g in req.gas_mixture],
+            solvent_name=req.solvent_name,
+            packing_name=req.packing_name,
+            removal_target_pct=req.removal_target_pct,
+            G_mass_kgs=req.G_mass_kgs,
+            L_mass_kgs=req.L_mass_kgs,
+            T_celsius=req.T_celsius,
+            P_bar=req.P_bar,
+            flooding_fraction=req.flooding_fraction,
+            mu_L_Pas=req.mu_L_Pas,
+            sigma_Nm=req.sigma_Nm,
+            rho_L_kgm3=req.rho_L_kgm3,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

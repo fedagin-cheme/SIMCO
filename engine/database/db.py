@@ -372,6 +372,24 @@ class ChemicalDatabase:
         out.sort(key=lambda r: _norm(r.get("name", "")))
         return out
 
+    # ── Absorption kinetics queries ───────────────────────────────────
+
+    def get_kinetics(self, acid_gas: str, solvent: str) -> Optional[Dict[str, Any]]:
+        """Lookup absorption kinetics for an acid gas-solvent pair.
+
+        Returns enhancement factor, rate constant, diffusivities, etc.
+        """
+        g = _norm(acid_gas)
+        s = _norm(solvent)
+        for rec in self._db.get("absorption_kinetics", []) or []:
+            if _norm(rec.get("acid_gas", "")) == g and _norm(rec.get("solvent", "")) == s:
+                return dict(rec)
+        return None
+
+    def list_kinetics(self) -> List[Dict[str, Any]]:
+        """List all absorption kinetics records."""
+        return [dict(r) for r in self._db.get("absorption_kinetics", []) or []]
+
     # ── Interaction listing helpers ────────────────────────────────────
 
     def list_nrtl_pairs(self) -> List[Dict[str, Any]]:

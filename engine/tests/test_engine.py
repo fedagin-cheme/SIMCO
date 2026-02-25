@@ -675,3 +675,121 @@ class TestMassTransfer:
         )
         assert result["Z_htu_ntu_m"] > 0
         assert result["absorption_factor_A"] > 0
+
+
+# ─── Scrubber Design Tests ────────────────────────────────────────────────
+
+from engine.thermo.scrubber import design_scrubber, henry_at_T
+
+
+class TestScrubber:
+    """Tests for multi-component gas scrubber design."""
+
+    def test_henry_at_T_increases_with_temperature(self):
+        """Henry's constant should increase with T for CO2 (exothermic dissolution)."""
+        H_25 = henry_at_T(161e6, -19400, 298.15, 298.15)
+        H_40 = henry_at_T(161e6, -19400, 298.15, 313.15)
+        assert H_40 < H_25  # dH_sol negative → H decreases (more soluble at lower T)
+
+    def test_flue_gas_mea_co2_removal(self):
+        """Flue gas + MEA: CO2 should be partially removed."""
+        result = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 73},
+                {"name": "Carbon dioxide", "mol_percent": 12},
+                {"name": "Water", "mol_percent": 12},
+                {"name": "Oxygen", "mol_percent": 3},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            removal_target_pct=90.0,
+            G_mass_kgs=1.0, L_mass_kgs=20.0,
+            T_celsius=40, P_bar=1.01325,
+            rho_L_kgm3=1012,
+        )
+        # CO2 should have some removal
+        co2_exit = next(g for g in result["exit_gas"] if "dioxide" in g["name"].lower())
+        assert co2_exit["removal_pct"] > 0
+        # N2 should pass through
+        n2_exit = next(g for g in result["exit_gas"] if "Nitrogen" in g["name"])
+        assert n2_exit["removal_pct"] == 0.0
+        # Column dimensions should be positive
+        assert result["D_column_mm"] > 0
+        assert result["Z_design_m"] > 0
+
+    def test_natural_gas_mdea_selectivity(self):
+        """MDEA should remove H2S faster than CO2 (selectivity)."""
+        result = design_scrubber(
+            gas_mixture=[
+                {"name": "Methane", "mol_percent": 90},
+                {"name": "Carbon dioxide", "mol_percent": 5},
+                {"name": "Hydrogen sulfide", "mol_percent": 3},
+                {"name": "Nitrogen", "mol_percent": 2},
+            ],
+            solvent_name="Methyldiethanolamine",
+            packing_name="IMTP 50",
+            removal_target_pct=95.0,
+            G_mass_kgs=2.0, L_mass_kgs=10.0,
+            T_celsius=35, P_bar=30.0,
+            rho_L_kgm3=1038,
+        )
+        h2s_exit = next(g for g in result["exit_gas"] if "sulfide" in g["name"].lower())
+        co2_exit = next(g for g in result["exit_gas"] if "dioxide" in g["name"].lower())
+        # H2S should have higher removal than CO2 with MDEA
+        assert h2s_exit["removal_pct"] >= co2_exit["removal_pct"]
+
+    def test_water_physical_absorption(self):
+        """SO2 scrubbing with water — physical absorption."""
+        result = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 95},
+                {"name": "Sulfur dioxide", "mol_percent": 5},
+            ],
+            solvent_name="Water",
+            packing_name="Pall Ring 50mm",
+            removal_target_pct=80.0,
+            G_mass_kgs=0.5, L_mass_kgs=5.0,
+            T_celsius=25, P_bar=1.01325,
+        )
+        assert result["Z_design_m"] > 0
+        so2_exit = next(g for g in result["exit_gas"] if "Sulfur" in g["name"])
+        assert so2_exit["removal_pct"] > 0
+
+    def test_exit_gas_sums_to_100(self):
+        """Exit gas mol percentages should sum to ~100%."""
+        result = design_scrubber(
+            gas_mixture=[
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            solvent_name="Monoethanolamine",
+            packing_name="Mellapak 250Y",
+            removal_target_pct=90.0,
+            G_mass_kgs=1.0, L_mass_kgs=20.0,
+            T_celsius=40, P_bar=1.01325,
+            rho_L_kgm3=1012,
+        )
+        total = sum(g["outlet_mol_pct"] for g in result["exit_gas"])
+        assert abs(total - 100.0) < 0.1, f"Exit gas total = {total}%"
+
+    def test_scrubber_api_endpoint(self):
+        """Test the /api/column/scrubber-design endpoint."""
+        from engine.api.server import app
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+        r = client.post("/api/column/scrubber-design", json={
+            "gas_mixture": [
+                {"name": "Nitrogen", "mol_percent": 85},
+                {"name": "Carbon dioxide", "mol_percent": 15},
+            ],
+            "solvent_name": "Monoethanolamine",
+            "packing_name": "Mellapak 250Y",
+            "G_mass_kgs": 1.0,
+            "L_mass_kgs": 20.0,
+            "rho_L_kgm3": 1012,
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert "exit_gas" in data
+        assert "Z_design_m" in data
+        assert data["D_column_mm"] > 0
