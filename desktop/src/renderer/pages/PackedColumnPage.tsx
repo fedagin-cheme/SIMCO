@@ -301,6 +301,36 @@ export function PackedColumnPage() {
             )}
           </div>
 
+          {/* Packing selector */}
+          <div className="panel p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <p className="label text-xs">Packing</p>
+              <div className="flex gap-1 ml-auto">
+                {(['all', 'random', 'structured'] as const).map(t => (
+                  <button key={t} onClick={() => setFilterType(t)}
+                    className={`px-2 py-1 rounded text-[10px] font-medium ${filterType === t ? 'bg-primary-600/20 text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                    {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {packingsLoading ? (
+                <div className="text-slate-500 text-xs py-2"><Loader2 size={12} className="animate-spin inline mr-1" />Loading…</div>
+              ) : filteredPackings.map(p => (
+                <button key={p.name} onClick={() => setSelectedPacking(p)}
+                  className={`flex-shrink-0 px-3 py-2 rounded-lg border text-left transition-colors ${
+                    selectedPacking?.name === p.name
+                      ? 'border-primary-500 bg-primary-600/10'
+                      : 'border-surface-600 hover:border-surface-500 bg-surface-800/50'
+                  }`}>
+                  <p className={`text-xs font-medium ${selectedPacking?.name === p.name ? 'text-primary-400' : 'text-slate-200'}`}>{p.name}</p>
+                  <p className="text-[10px] text-slate-500">{p.type} · F<sub>p</sub>={p.packing_factor} · HETP={p.hetp}m</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Operating Conditions */}
           <div className="panel p-3 space-y-2">
             <p className="label text-xs flex items-center gap-1.5"><Info size={12} className="text-slate-500" /> Operating Conditions</p>
@@ -339,38 +369,8 @@ export function PackedColumnPage() {
           )}
         </div>
 
-        {/* ═══ RIGHT PANEL: Packing + Results ═══ */}
+        {/* ═══ RIGHT PANEL: Results ═══ */}
         <div className="flex-1 flex flex-col gap-3 min-w-0 min-h-0 overflow-y-auto">
-
-          {/* Packing selector */}
-          <div className="panel p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <p className="label text-xs">Packing</p>
-              <div className="flex gap-1 ml-auto">
-                {(['all', 'random', 'structured'] as const).map(t => (
-                  <button key={t} onClick={() => setFilterType(t)}
-                    className={`px-2 py-1 rounded text-[10px] font-medium ${filterType === t ? 'bg-primary-600/20 text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
-                    {t === 'all' ? 'All' : t.charAt(0).toUpperCase() + t.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {packingsLoading ? (
-                <div className="text-slate-500 text-xs py-2"><Loader2 size={12} className="animate-spin inline mr-1" />Loading…</div>
-              ) : filteredPackings.map(p => (
-                <button key={p.name} onClick={() => setSelectedPacking(p)}
-                  className={`flex-shrink-0 px-3 py-2 rounded-lg border text-left transition-colors ${
-                    selectedPacking?.name === p.name
-                      ? 'border-primary-500 bg-primary-600/10'
-                      : 'border-surface-600 hover:border-surface-500 bg-surface-800/50'
-                  }`}>
-                  <p className={`text-xs font-medium ${selectedPacking?.name === p.name ? 'text-primary-400' : 'text-slate-200'}`}>{p.name}</p>
-                  <p className="text-[10px] text-slate-500">{p.type} · F<sub>p</sub>={p.packing_factor} · HETP={p.hetp}m</p>
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* ── Results ── */}
           {result ? (
