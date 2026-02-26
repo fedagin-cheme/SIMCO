@@ -436,6 +436,8 @@ class ScrubberDesignRequest(BaseModel):
     rho_L_kgm3: float = 998.0
     solve_for: str = "Z"
     Z_packed_m: Optional[float] = None
+    target_component: Optional[str] = None
+    solvent_wt_pct: float = 100.0
 
 
 @app.post("/api/column/scrubber-design")
@@ -468,6 +470,8 @@ def scrubber_design_endpoint(req: ScrubberDesignRequest):
             rho_L_kgm3=req.rho_L_kgm3,
             solve_for=req.solve_for,
             Z_packed_m=req.Z_packed_m,
+            target_component=req.target_component,
+            solvent_wt_pct=req.solvent_wt_pct,
         )
         return result
     except ValueError as e:

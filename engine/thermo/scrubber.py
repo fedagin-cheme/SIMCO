@@ -43,6 +43,10 @@ from engine.thermo.mass_transfer import (
 
 R_GAS = 8.314  # J/(mol·K)
 
+# Reference wt% concentrations assumed in the kinetics DB E values
+_SOLVENT_REF_WT = {"MEA": 30.0, "MDEA": 50.0}
+_MW_WATER = 18.015
+
 
 def henry_at_T(H_pa_ref: float, dH_sol: float, T_ref_K: float, T_K: float) -> float:
     """Henry's constant at temperature T using van't Hoff equation.
@@ -97,6 +101,7 @@ def _prepare_system(
     mu_L_Pas: float,
     sigma_Nm: float,
     rho_L_kgm3: float,
+    solvent_wt_pct: float = 100.0,
 ) -> Dict[str, Any]:
     """Resolve DB lookups, compute gas properties, and run hydraulic design.
 
@@ -152,13 +157,21 @@ def _prepare_system(
     )
     A_column = hyd_result["A_column_m2"]
 
-    # Molar flows
+    # Molar flows — use effective solvent MW for amine solutions
     solv_id = _solvent_id(solvent_name)
     G_mol = G_mass_kgs / (mixture_MW / 1000.0)  # mol/s
-    L_mol = L_mass_kgs / (rho_L_kgm3 / 55500.0 * rho_L_kgm3 / 1000.0)  # rough estimate
+
     solvent_comp = db.get_compound(solvent_name)
-    if solvent_comp:
-        L_mol = L_mass_kgs / (solvent_comp["mw"] / 1000.0)
+    solvent_mw = solvent_comp["mw"] if solvent_comp else 18.015
+
+    # Effective MW of the solvent solution (amine + water mixture)
+    wt_frac = solvent_wt_pct / 100.0
+    if solvent_wt_pct < 100.0 and solv_id in ("MEA", "MDEA"):
+        MW_eff = 1.0 / (wt_frac / solvent_mw + (1.0 - wt_frac) / _MW_WATER)
+    else:
+        MW_eff = solvent_mw
+
+    L_mol = L_mass_kgs / (MW_eff / 1000.0)
 
     return {
         "db": db,
@@ -181,14 +194,23 @@ def _prepare_system(
         "mu_L_Pas": mu_L_Pas,
         "solvent_name": solvent_name,
         "solvent_comp": solvent_comp,
+        "solvent_wt_pct": solvent_wt_pct,
+        "MW_eff": MW_eff,
     }
 
 
 def _compute_acid_gas_analysis(
     ctx: Dict[str, Any],
     removal_target_pct: float,
+    target_component: Optional[str] = None,
 ) -> tuple:
     """Per-component mass transfer analysis for all acid gases.
+
+    Parameters
+    ----------
+    target_component : str or None
+        If set, Z_design is driven by this component only.
+        If None, Z_design = max Z across all acid gases (legacy behavior).
 
     Returns
     -------
@@ -208,6 +230,7 @@ def _compute_acid_gas_analysis(
     L_mass_kgs = ctx["L_mass_kgs"]
     mu_L_Pas = ctx["mu_L_Pas"]
     rho_L_kgm3 = ctx["rho_L_kgm3"]
+    solvent_wt_pct = ctx.get("solvent_wt_pct", 100.0)
 
     acid_gas_results = []
     max_NTU = 0.0
@@ -233,11 +256,18 @@ def _compute_acid_gas_analysis(
 
         H_pa_T = henry_at_T(henry["H_pa"], henry["dH_sol"], henry["T_ref"], T_K)
 
-        # Enhancement factor
+        # Enhancement factor — scale by wt% relative to DB reference
         kinetics = db.get_kinetics(comp["id"], solv_id)
-        E = kinetics["enhancement_factor_E"] if kinetics else 1.0
+        E_db = kinetics["enhancement_factor_E"] if kinetics else 1.0
         D_G_val = kinetics["D_G_m2s"] if kinetics else 1.5e-5
         D_L_val = kinetics["D_L_m2s"] if kinetics else 1.5e-9
+
+        # Scale E by actual wt% vs reference wt% (first-order approximation)
+        ref_wt = _SOLVENT_REF_WT.get(solv_id)
+        if ref_wt and solvent_wt_pct < 100.0:
+            E = E_db * (solvent_wt_pct / ref_wt)
+        else:
+            E = E_db
 
         # Effective equilibrium slope
         m_eff = H_pa_T / (E * P_Pa)
@@ -307,18 +337,33 @@ def _compute_acid_gas_analysis(
             "kL_a_effective": round(kL_a_eff, 6),
             "D_G": D_G_val,
             "D_L": D_L_val,
+            # Full-precision values for back-calculation (avoids rounding errors)
+            "_A_full": A,
+            "_H_OG_full": H_OG,
+            "_m_eff_full": m_eff,
         })
 
-        if Z_comp > max_NTU * max_HOG if max_HOG > 0 else 0:
-            pass
         # Track the dominant (controlling) component
         if NTU > 0 and H_OG > 0 and Z_comp > (max_NTU * max_HOG if dominant_component else 0):
             max_NTU = NTU
             max_HOG = H_OG
             dominant_component = comp["name"]
 
-    # Design height = max Z across all acid gases
-    Z_design = max((r["Z_required_m"] for r in acid_gas_results if r.get("Z_required_m")), default=0.0)
+    # Design height selection
+    if target_component:
+        # Use the target component's Z_required
+        target_ag = next(
+            (r for r in acid_gas_results
+             if r["name"] == target_component and r.get("status") == "calculated"),
+            None,
+        )
+        if target_ag and target_ag.get("Z_required_m"):
+            Z_design = target_ag["Z_required_m"]
+            dominant_component = target_component
+        else:
+            Z_design = max((r["Z_required_m"] for r in acid_gas_results if r.get("Z_required_m")), default=0.0)
+    else:
+        Z_design = max((r["Z_required_m"] for r in acid_gas_results if r.get("Z_required_m")), default=0.0)
 
     return acid_gas_results, Z_design, max_NTU, max_HOG, dominant_component
 
@@ -351,9 +396,9 @@ def _backcalc_at_height(
             None,
         )
 
-        if ag and ag["H_OG_m"] > 0 and Z_design > 0:
-            actual_NTU = Z_design / ag["H_OG_m"]
-            A = ag["A_factor"]
+        if ag and ag.get("_H_OG_full", ag["H_OG_m"]) > 0 and Z_design > 0:
+            actual_NTU = Z_design / ag.get("_H_OG_full", ag["H_OG_m"])
+            A = ag.get("_A_full", ag["A_factor"])
 
             y_in_val = comp["mol_fraction"]
             y_out_actual = kremser_y_out(y_in_val, A, actual_NTU)
@@ -427,6 +472,8 @@ def _compute_Z_for_L(
     sigma_Nm: float,
     rho_L_kgm3: float,
     removal_target_pct: float,
+    solvent_wt_pct: float = 100.0,
+    target_component: Optional[str] = None,
 ) -> float:
     """Compute Z_design for a given L. Lightweight wrapper for bisection."""
     ctx = _prepare_system(
@@ -434,8 +481,9 @@ def _compute_Z_for_L(
         G_mass_kgs, L_mass_kgs,
         T_celsius, P_bar, flooding_fraction,
         mu_L_Pas, sigma_Nm, rho_L_kgm3,
+        solvent_wt_pct=solvent_wt_pct,
     )
-    _, Z_design, _, _, _ = _compute_acid_gas_analysis(ctx, removal_target_pct)
+    _, Z_design, _, _, _ = _compute_acid_gas_analysis(ctx, removal_target_pct, target_component=target_component)
     return Z_design
 
 
@@ -452,6 +500,8 @@ def _bisect_for_L(
     rho_L_kgm3: float,
     removal_target_pct: float,
     Z_target: float,
+    solvent_wt_pct: float = 100.0,
+    target_component: Optional[str] = None,
     tol: float = 0.001,
     max_iter: int = 50,
 ) -> tuple:
@@ -512,13 +562,15 @@ def _bisect_for_L(
         gas_mixture, solvent_name, packing_name,
         G_mass_kgs, L_min, T_celsius, P_bar,
         flooding_fraction, mu_L_Pas, sigma_Nm, rho_L_kgm3,
-        removal_target_pct,
+        removal_target_pct, solvent_wt_pct=solvent_wt_pct,
+        target_component=target_component,
     )
     Z_at_max = _compute_Z_for_L(
         gas_mixture, solvent_name, packing_name,
         G_mass_kgs, L_max, T_celsius, P_bar,
         flooding_fraction, mu_L_Pas, sigma_Nm, rho_L_kgm3,
-        removal_target_pct,
+        removal_target_pct, solvent_wt_pct=solvent_wt_pct,
+        target_component=target_component,
     )
 
     if Z_at_max > Z_target:
@@ -546,7 +598,8 @@ def _bisect_for_L(
             gas_mixture, solvent_name, packing_name,
             G_mass_kgs, L_mid, T_celsius, P_bar,
             flooding_fraction, mu_L_Pas, sigma_Nm, rho_L_kgm3,
-            removal_target_pct,
+            removal_target_pct, solvent_wt_pct=solvent_wt_pct,
+            target_component=target_component,
         )
 
         if abs(Z_mid - Z_target) < tol:
@@ -581,6 +634,8 @@ def design_scrubber(
     rho_L_kgm3: float = 998.0,
     solve_for: str = "Z",
     Z_packed_m: Optional[float] = None,
+    target_component: Optional[str] = None,
+    solvent_wt_pct: float = 100.0,
 ) -> Dict[str, Any]:
     """Design a multi-component gas scrubber.
 
@@ -647,6 +702,8 @@ def design_scrubber(
             rho_L_kgm3=rho_L_kgm3,
             removal_target_pct=removal_target_pct,
             Z_target=Z_packed_m,
+            solvent_wt_pct=solvent_wt_pct,
+            target_component=target_component,
         )
         L_mass_kgs = L_result
         computed_L_kgs = L_result
@@ -657,17 +714,20 @@ def design_scrubber(
         G_mass_kgs, L_mass_kgs,
         T_celsius, P_bar, flooding_fraction,
         mu_L_Pas, sigma_Nm, rho_L_kgm3,
+        solvent_wt_pct=solvent_wt_pct,
     )
 
     # ── Acid gas analysis
     if solve_for == "eta":
         # For Mode 2, we still need H_OG per component. Use a high dummy target
         # so that NTU calculations don't cap removal.
-        acid_gas_results, _, max_NTU, max_HOG, dominant_component = _compute_acid_gas_analysis(ctx, 99.0)
+        acid_gas_results, _, max_NTU, max_HOG, dominant_component = _compute_acid_gas_analysis(
+            ctx, 99.0, target_component=target_component,
+        )
         Z_design = Z_packed_m
     else:
         acid_gas_results, Z_design_computed, max_NTU, max_HOG, dominant_component = _compute_acid_gas_analysis(
-            ctx, removal_target_pct,
+            ctx, removal_target_pct, target_component=target_component,
         )
         if solve_for == "Z":
             Z_design = Z_design_computed
@@ -678,7 +738,7 @@ def design_scrubber(
     exit_gas, total_absorbed_mol_s, lines, dom_comp_name = _backcalc_at_height(
         ctx, acid_gas_results, Z_design, removal_target_pct,
     )
-    if dom_comp_name:
+    if dom_comp_name and not target_component:
         dominant_component = dom_comp_name
 
     # ── Compute actual removal of dominant component (for Mode 2 output)
@@ -739,6 +799,8 @@ def design_scrubber(
 
         # Solve mode info
         "solve_mode": solve_for,
+        "target_component": target_component,
+        "solvent_wt_pct": solvent_wt_pct,
     }
 
     # Mode-specific outputs

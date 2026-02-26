@@ -61,6 +61,8 @@ interface ScrubberResult {
   L_mass_kgs_input?: number
   bisection_converged?: boolean
   bisection_iterations?: number
+  target_component?: string | null
+  solvent_wt_pct?: number
 }
 
 const SOLVENT_DENSITY: Record<string, number> = {
@@ -135,6 +137,10 @@ export function PackedColumnPage() {
   const molValid = Math.abs(totalMol - 100) < 0.5
   const availableGases = allGases.filter(g => !mixture.some(r => r.compound.key === g.key))
 
+  // List of acid gases in the current mixture (for target gas selection)
+  const acidGasesInMixture = mixture.filter(r => r.compound.category === 'acid_gas')
+  const [targetGas, setTargetGas] = useState('')
+
   // ── Operating conditions
   const [gasTotalFlow, setGasTotalFlow] = useState('1.0')
   const [gasTemp, setGasTemp] = useState('40')
@@ -145,6 +151,8 @@ export function PackedColumnPage() {
   const [solventFlow, setSolventFlow] = useState('20.0')
   const [solventMuL, setSolventMuL] = useState('1.5')
   const [solventSigma, setSolventSigma] = useState('0.072')
+  const [solventWtPct, setSolventWtPct] = useState('30')
+  const isAmineSolvent = selectedSolvent === 'Monoethanolamine' || selectedSolvent === 'Methyldiethanolamine'
 
   // ── Packing
   const [packings, setPackings] = useState<Packing[]>([])
@@ -201,6 +209,16 @@ export function PackedColumnPage() {
     setMixture(prev => [...prev, { compound: comp, molPercent: '' }])
   }
 
+  function addAirPreset() {
+    const n2 = allGases.find(g => g.name === 'Nitrogen')
+    const o2 = allGases.find(g => g.name === 'Oxygen')
+    if (!n2 || !o2) return
+    setMixture(prev => {
+      const without = prev.filter(r => r.compound.name !== 'Nitrogen' && r.compound.name !== 'Oxygen')
+      return [...without, { compound: n2, molPercent: '79' }, { compound: o2, molPercent: '21' }]
+    })
+  }
+
   // Run calculation
   async function runDesign() {
     if (!selectedPacking || !selectedSolvent || mixture.length === 0 || !molValid) return
@@ -223,6 +241,10 @@ export function PackedColumnPage() {
       if (solveFor !== 'L') body.L_mass_kgs = parseFloat(solventFlow)
       if (solveFor !== 'eta') body.removal_target_pct = parseFloat(removalTarget)
       if (solveFor !== 'Z') body.Z_packed_m = parseFloat(packedHeight)
+      // Target gas for removal reference
+      if (targetGas) body.target_component = targetGas
+      // Solvent concentration
+      if (isAmineSolvent) body.solvent_wt_pct = parseFloat(solventWtPct) || 30
 
       const res = await fetch(`${ENGINE_URL}/api/column/scrubber-design`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -262,7 +284,14 @@ export function PackedColumnPage() {
 
           {/* Gas Mixture */}
           <div className="panel p-3 space-y-2">
-            <p className="label text-xs flex items-center gap-1.5"><Wind size={12} className="text-slate-500" /> Gas Mixture</p>
+            <div className="flex items-center justify-between">
+              <p className="label text-xs flex items-center gap-1.5"><Wind size={12} className="text-slate-500" /> Gas Mixture</p>
+              <button onClick={addAirPreset}
+                className="px-2 py-0.5 rounded text-[10px] font-medium bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors"
+                title="Add N₂ (79%) + O₂ (21%)">
+                + Air
+              </button>
+            </div>
             {mixture.map(r => (
               <div key={r.compound.key} className="flex items-center gap-1.5">
                 <span className={`text-xs w-36 truncate ${r.compound.category === 'acid_gas' ? 'text-red-400' : 'text-slate-300'}`}>
@@ -287,6 +316,18 @@ export function PackedColumnPage() {
                 <option key={g.key} value={g.key}>{g.name} ({g.formula}, {g.mw}) — {g.category === 'acid_gas' ? 'acid gas' : 'carrier'}</option>
               ))}
             </select>
+            {acidGasesInMixture.length > 0 && (
+              <div>
+                <label className="text-slate-500 text-[10px] block mb-0.5">Target gas for removal</label>
+                <select value={targetGas} onChange={e => setTargetGas(e.target.value)}
+                  className="input-field py-1 text-xs w-full">
+                  <option value="">All acid gases (max Z)</option>
+                  {acidGasesInMixture.map(r => (
+                    <option key={r.compound.key} value={r.compound.name}>{r.compound.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {mixtureMW > 0 && (
               <p className="text-[10px] text-slate-600">MW<sub>mix</sub>={mixtureMW.toFixed(2)} · ρ<sub>G</sub>≈{rhoG.toFixed(3)} kg/m³</p>
             )}
@@ -302,13 +343,21 @@ export function PackedColumnPage() {
               ))}
             </select>
             {selectedSolvent && (
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="μ_L" hint="mPa·s">
-                  <input type="number" value={solventMuL} onChange={e => setSolventMuL(e.target.value)} className="input-field w-full py-1 text-xs" step="0.1" />
-                </Field>
-                <Field label="σ" hint="N/m">
-                  <input type="number" value={solventSigma} onChange={e => setSolventSigma(e.target.value)} className="input-field w-full py-1 text-xs" step="0.001" />
-                </Field>
+              <div className="space-y-2">
+                {isAmineSolvent && (
+                  <Field label="Amine concentration" hint="wt% in water">
+                    <input type="number" value={solventWtPct} onChange={e => setSolventWtPct(e.target.value)}
+                      className="input-field w-full py-1 text-xs" min="5" max="100" step="5" />
+                  </Field>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="μ_L" hint="mPa·s">
+                    <input type="number" value={solventMuL} onChange={e => setSolventMuL(e.target.value)} className="input-field w-full py-1 text-xs" step="0.1" />
+                  </Field>
+                  <Field label="σ" hint="N/m">
+                    <input type="number" value={solventSigma} onChange={e => setSolventSigma(e.target.value)} className="input-field w-full py-1 text-xs" step="0.001" />
+                  </Field>
+                </div>
               </div>
             )}
           </div>
