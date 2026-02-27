@@ -425,34 +425,53 @@ class ScrubberDesignRequest(BaseModel):
     gas_mixture: list[GasComponent]
     solvent_name: str
     packing_name: str
-    removal_target_pct: float = 90.0
+    removal_target_pct: Optional[float] = 90.0
     G_mass_kgs: float = 1.0
-    L_mass_kgs: float = 3.0
+    L_mass_kgs: Optional[float] = 3.0
     T_celsius: float = 40.0
     P_bar: float = 1.01325
     flooding_fraction: float = 0.70
     mu_L_Pas: float = 1.0e-3
     sigma_Nm: float = 0.072
     rho_L_kgm3: float = 998.0
+    solve_for: str = "Z"
+    Z_packed_m: Optional[float] = None
+    target_component: Optional[str] = None
+    solvent_wt_pct: float = 100.0
 
 
 @app.post("/api/column/scrubber-design")
 def scrubber_design_endpoint(req: ScrubberDesignRequest):
-    """Multi-component gas scrubber design."""
+    """Multi-component gas scrubber design with DOF-based solve modes."""
+    if req.solve_for not in ("Z", "eta", "L"):
+        raise HTTPException(status_code=400, detail="solve_for must be 'Z', 'eta', or 'L'")
+    if req.solve_for in ("eta", "L") and req.Z_packed_m is None:
+        raise HTTPException(status_code=400, detail="Z_packed_m required for this solve mode")
+    if req.solve_for == "Z" and req.L_mass_kgs is None:
+        raise HTTPException(status_code=400, detail="L_mass_kgs required when solving for Z")
+    if req.solve_for in ("Z", "L") and req.removal_target_pct is None:
+        raise HTTPException(status_code=400, detail="removal_target_pct required for this solve mode")
+    if req.solve_for == "eta" and req.L_mass_kgs is None:
+        raise HTTPException(status_code=400, detail="L_mass_kgs required when solving for eta")
+
     try:
         result = design_scrubber(
             gas_mixture=[{"name": g.name, "mol_percent": g.mol_percent} for g in req.gas_mixture],
             solvent_name=req.solvent_name,
             packing_name=req.packing_name,
-            removal_target_pct=req.removal_target_pct,
+            removal_target_pct=req.removal_target_pct or 90.0,
             G_mass_kgs=req.G_mass_kgs,
-            L_mass_kgs=req.L_mass_kgs,
+            L_mass_kgs=req.L_mass_kgs or 3.0,
             T_celsius=req.T_celsius,
             P_bar=req.P_bar,
             flooding_fraction=req.flooding_fraction,
             mu_L_Pas=req.mu_L_Pas,
             sigma_Nm=req.sigma_Nm,
             rho_L_kgm3=req.rho_L_kgm3,
+            solve_for=req.solve_for,
+            Z_packed_m=req.Z_packed_m,
+            target_component=req.target_component,
+            solvent_wt_pct=req.solvent_wt_pct,
         )
         return result
     except ValueError as e:

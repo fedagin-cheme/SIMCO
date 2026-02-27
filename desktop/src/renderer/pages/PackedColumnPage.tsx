@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import {
   Columns, Play, AlertCircle, Loader2, ChevronRight, Info,
-  CheckCircle2, AlertTriangle, X, Wind, Droplets, FlaskConical, Ruler,
+  CheckCircle2, AlertTriangle, X, Wind, Droplets, FlaskConical, Ruler, Target,
 } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -39,6 +39,8 @@ interface ExitGasRow {
   absorbed_mol_s: number
 }
 
+type SolveTarget = 'Z' | 'eta' | 'L'
+
 interface ScrubberResult {
   solvent: string; packing: string; T_celsius: number; P_bar: number
   removal_target_pct: number; mixture_MW: number
@@ -53,6 +55,14 @@ interface ScrubberResult {
   exit_gas: ExitGasRow[]
   total_absorbed_mol_s: number
   lines: { x_eq: number[]; y_eq: number[]; x_op: number[]; y_op: number[] } | null
+  solve_mode?: SolveTarget
+  computed_removal_pct?: number
+  computed_L_kgs?: number
+  L_mass_kgs_input?: number
+  bisection_converged?: boolean
+  bisection_iterations?: number
+  target_component?: string | null
+  solvent_wt_pct?: number
 }
 
 const SOLVENT_DENSITY: Record<string, number> = {
@@ -127,6 +137,10 @@ export function PackedColumnPage() {
   const molValid = Math.abs(totalMol - 100) < 0.5
   const availableGases = allGases.filter(g => !mixture.some(r => r.compound.key === g.key))
 
+  // List of acid gases in the current mixture (for target gas selection)
+  const acidGasesInMixture = mixture.filter(r => r.compound.category === 'acid_gas')
+  const [targetGas, setTargetGas] = useState('')
+
   // ── Operating conditions
   const [gasTotalFlow, setGasTotalFlow] = useState('1.0')
   const [gasTemp, setGasTemp] = useState('40')
@@ -137,6 +151,8 @@ export function PackedColumnPage() {
   const [solventFlow, setSolventFlow] = useState('20.0')
   const [solventMuL, setSolventMuL] = useState('1.5')
   const [solventSigma, setSolventSigma] = useState('0.072')
+  const [solventWtPct, setSolventWtPct] = useState('30')
+  const isAmineSolvent = selectedSolvent === 'Monoethanolamine' || selectedSolvent === 'Methyldiethanolamine'
 
   // ── Packing
   const [packings, setPackings] = useState<Packing[]>([])
@@ -147,6 +163,8 @@ export function PackedColumnPage() {
   // ── Design
   const [removalTarget, setRemovalTarget] = useState('90')
   const [floodFrac, setFloodFrac] = useState('70')
+  const [solveFor, setSolveFor] = useState<SolveTarget>('Z')
+  const [packedHeight, setPackedHeight] = useState('5.0')
 
   // ── Results
   const [result, setResult] = useState<ScrubberResult | null>(null)
@@ -191,27 +209,46 @@ export function PackedColumnPage() {
     setMixture(prev => [...prev, { compound: comp, molPercent: '' }])
   }
 
+  function addAirPreset() {
+    const n2 = allGases.find(g => g.name === 'Nitrogen')
+    const o2 = allGases.find(g => g.name === 'Oxygen')
+    if (!n2 || !o2) return
+    setMixture(prev => {
+      const without = prev.filter(r => r.compound.name !== 'Nitrogen' && r.compound.name !== 'Oxygen')
+      return [...without, { compound: n2, molPercent: '79' }, { compound: o2, molPercent: '21' }]
+    })
+  }
+
   // Run calculation
   async function runDesign() {
     if (!selectedPacking || !selectedSolvent || mixture.length === 0 || !molValid) return
     setLoading(true); setError(null); setResult(null)
     try {
+      const body: Record<string, any> = {
+        gas_mixture: mixture.map(r => ({ name: r.compound.name, mol_percent: parseFloat(r.molPercent) || 0 })),
+        solvent_name: selectedSolvent,
+        packing_name: selectedPacking.name,
+        G_mass_kgs: parseFloat(gasTotalFlow),
+        T_celsius: parseFloat(gasTemp),
+        P_bar: parseFloat(gasPressure),
+        flooding_fraction: parseFloat(floodFrac) / 100,
+        mu_L_Pas: parseFloat(solventMuL) * 1e-3,
+        sigma_Nm: parseFloat(solventSigma),
+        rho_L_kgm3: rhoL,
+        solve_for: solveFor,
+      }
+      // Add the 2 specified variables (not the one being solved for)
+      if (solveFor !== 'L') body.L_mass_kgs = parseFloat(solventFlow)
+      if (solveFor !== 'eta') body.removal_target_pct = parseFloat(removalTarget)
+      if (solveFor !== 'Z') body.Z_packed_m = parseFloat(packedHeight)
+      // Target gas for removal reference
+      if (targetGas) body.target_component = targetGas
+      // Solvent concentration
+      if (isAmineSolvent) body.solvent_wt_pct = parseFloat(solventWtPct) || 30
+
       const res = await fetch(`${ENGINE_URL}/api/column/scrubber-design`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gas_mixture: mixture.map(r => ({ name: r.compound.name, mol_percent: parseFloat(r.molPercent) || 0 })),
-          solvent_name: selectedSolvent,
-          packing_name: selectedPacking.name,
-          removal_target_pct: parseFloat(removalTarget),
-          G_mass_kgs: parseFloat(gasTotalFlow),
-          L_mass_kgs: parseFloat(solventFlow),
-          T_celsius: parseFloat(gasTemp),
-          P_bar: parseFloat(gasPressure),
-          flooding_fraction: parseFloat(floodFrac) / 100,
-          mu_L_Pas: parseFloat(solventMuL) * 1e-3,
-          sigma_Nm: parseFloat(solventSigma),
-          rho_L_kgm3: rhoL,
-        }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${res.status}`) }
       setResult(await res.json())
@@ -247,7 +284,14 @@ export function PackedColumnPage() {
 
           {/* Gas Mixture */}
           <div className="panel p-3 space-y-2">
-            <p className="label text-xs flex items-center gap-1.5"><Wind size={12} className="text-slate-500" /> Gas Mixture</p>
+            <div className="flex items-center justify-between">
+              <p className="label text-xs flex items-center gap-1.5"><Wind size={12} className="text-slate-500" /> Gas Mixture</p>
+              <button onClick={addAirPreset}
+                className="px-2 py-0.5 rounded text-[10px] font-medium bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors"
+                title="Add N₂ (79%) + O₂ (21%)">
+                + Air
+              </button>
+            </div>
             {mixture.map(r => (
               <div key={r.compound.key} className="flex items-center gap-1.5">
                 <span className={`text-xs w-36 truncate ${r.compound.category === 'acid_gas' ? 'text-red-400' : 'text-slate-300'}`}>
@@ -272,6 +316,18 @@ export function PackedColumnPage() {
                 <option key={g.key} value={g.key}>{g.name} ({g.formula}, {g.mw}) — {g.category === 'acid_gas' ? 'acid gas' : 'carrier'}</option>
               ))}
             </select>
+            {acidGasesInMixture.length > 0 && (
+              <div>
+                <label className="text-slate-500 text-[10px] block mb-0.5">Target gas for removal</label>
+                <select value={targetGas} onChange={e => setTargetGas(e.target.value)}
+                  className="input-field py-1 text-xs w-full">
+                  <option value="">All acid gases (max Z)</option>
+                  {acidGasesInMixture.map(r => (
+                    <option key={r.compound.key} value={r.compound.name}>{r.compound.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             {mixtureMW > 0 && (
               <p className="text-[10px] text-slate-600">MW<sub>mix</sub>={mixtureMW.toFixed(2)} · ρ<sub>G</sub>≈{rhoG.toFixed(3)} kg/m³</p>
             )}
@@ -287,16 +343,21 @@ export function PackedColumnPage() {
               ))}
             </select>
             {selectedSolvent && (
-              <div className="grid grid-cols-3 gap-2">
-                <Field label="L flow" hint="kg/s">
-                  <input type="number" value={solventFlow} onChange={e => setSolventFlow(e.target.value)} className="input-field w-full py-1 text-xs" step="0.5" />
-                </Field>
-                <Field label="μ_L" hint="mPa·s">
-                  <input type="number" value={solventMuL} onChange={e => setSolventMuL(e.target.value)} className="input-field w-full py-1 text-xs" step="0.1" />
-                </Field>
-                <Field label="σ" hint="N/m">
-                  <input type="number" value={solventSigma} onChange={e => setSolventSigma(e.target.value)} className="input-field w-full py-1 text-xs" step="0.001" />
-                </Field>
+              <div className="space-y-2">
+                {isAmineSolvent && (
+                  <Field label="Amine concentration" hint="wt% in water">
+                    <input type="number" value={solventWtPct} onChange={e => setSolventWtPct(e.target.value)}
+                      className="input-field w-full py-1 text-xs" min="5" max="100" step="5" />
+                  </Field>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <Field label="μ_L" hint="mPa·s">
+                    <input type="number" value={solventMuL} onChange={e => setSolventMuL(e.target.value)} className="input-field w-full py-1 text-xs" step="0.1" />
+                  </Field>
+                  <Field label="σ" hint="N/m">
+                    <input type="number" value={solventSigma} onChange={e => setSolventSigma(e.target.value)} className="input-field w-full py-1 text-xs" step="0.001" />
+                  </Field>
+                </div>
               </div>
             )}
           </div>
@@ -314,18 +375,20 @@ export function PackedColumnPage() {
                 ))}
               </div>
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
               {packingsLoading ? (
                 <div className="text-slate-500 text-xs py-2"><Loader2 size={12} className="animate-spin inline mr-1" />Loading…</div>
               ) : filteredPackings.map(p => (
                 <button key={p.name} onClick={() => setSelectedPacking(p)}
-                  className={`flex-shrink-0 px-3 py-2 rounded-lg border text-left transition-colors ${
+                  className={`w-full px-3 py-1.5 rounded-lg border text-left transition-colors ${
                     selectedPacking?.name === p.name
                       ? 'border-primary-500 bg-primary-600/10'
                       : 'border-surface-600 hover:border-surface-500 bg-surface-800/50'
                   }`}>
-                  <p className={`text-xs font-medium ${selectedPacking?.name === p.name ? 'text-primary-400' : 'text-slate-200'}`}>{p.name}</p>
-                  <p className="text-[10px] text-slate-500">{p.type} · F<sub>p</sub>={p.packing_factor} · HETP={p.hetp}m</p>
+                  <div className="flex items-center justify-between">
+                    <p className={`text-xs font-medium ${selectedPacking?.name === p.name ? 'text-primary-400' : 'text-slate-200'}`}>{p.name}</p>
+                    <p className="text-[10px] text-slate-500">{p.type} · F<sub>p</sub>={p.packing_factor} · HETP={p.hetp}m</p>
+                  </div>
                 </button>
               ))}
             </div>
@@ -334,7 +397,7 @@ export function PackedColumnPage() {
           {/* Operating Conditions */}
           <div className="panel p-3 space-y-2">
             <p className="label text-xs flex items-center gap-1.5"><Info size={12} className="text-slate-500" /> Operating Conditions</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <Field label="G flow" hint="kg/s">
                 <input type="number" value={gasTotalFlow} onChange={e => setGasTotalFlow(e.target.value)} className="input-field w-full py-1 text-xs" step="0.1" />
               </Field>
@@ -344,14 +407,105 @@ export function PackedColumnPage() {
               <Field label="P" hint="bar">
                 <input type="number" value={gasPressure} onChange={e => setGasPressure(e.target.value)} className="input-field w-full py-1 text-xs" step="0.01" />
               </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Removal target" hint="%">
-                <input type="number" value={removalTarget} onChange={e => setRemovalTarget(e.target.value)} className="input-field w-full py-1 text-xs" min="10" max="99.9" step="5" />
-              </Field>
-              <Field label="Flooding frac." hint="%">
+              <Field label="Flooding" hint="%">
                 <input type="number" value={floodFrac} onChange={e => setFloodFrac(e.target.value)} className="input-field w-full py-1 text-xs" min="30" max="95" step="5" />
               </Field>
+            </div>
+          </div>
+
+          {/* Design Variables (DOF = 2: specify 2, compute 1) */}
+          <div className="panel p-3 space-y-2">
+            <div className="flex items-center justify-between mb-1">
+              <p className="label text-xs flex items-center gap-1.5"><FlaskConical size={12} className="text-slate-500" /> Design Variables</p>
+              <span className="text-[10px] text-slate-600">Specify 2, compute 1</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {/* Solvent Flow (L) */}
+              <div className={`rounded-lg border p-2 transition-all ${
+                solveFor === 'L' ? 'border-primary-500/50 bg-primary-600/5' : 'border-surface-600 bg-surface-800/50'
+              }`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1">
+                    <Droplets size={10} className="text-slate-500" />
+                    <span className="text-[10px] text-slate-400 font-medium">L (solvent)</span>
+                  </div>
+                  <button onClick={() => setSolveFor(solveFor === 'L' ? 'Z' : 'L')}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
+                      solveFor === 'L'
+                        ? 'bg-primary-600/20 text-primary-400'
+                        : 'bg-surface-700 text-slate-500 hover:text-slate-300'
+                    }`}>
+                    {solveFor === 'L' ? 'CALC' : 'SET'}
+                  </button>
+                </div>
+                {solveFor === 'L' ? (
+                  <p className="text-primary-400 text-[10px] italic">Will be computed</p>
+                ) : (
+                  <div>
+                    <input type="number" value={solventFlow} onChange={e => setSolventFlow(e.target.value)}
+                      className="input-field w-full py-1 text-xs" step="0.5" />
+                    <span className="text-slate-600 text-[9px]">kg/s</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Removal Target (η) */}
+              <div className={`rounded-lg border p-2 transition-all ${
+                solveFor === 'eta' ? 'border-primary-500/50 bg-primary-600/5' : 'border-surface-600 bg-surface-800/50'
+              }`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1">
+                    <Target size={10} className="text-slate-500" />
+                    <span className="text-[10px] text-slate-400 font-medium">η (removal)</span>
+                  </div>
+                  <button onClick={() => setSolveFor(solveFor === 'eta' ? 'Z' : 'eta')}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
+                      solveFor === 'eta'
+                        ? 'bg-primary-600/20 text-primary-400'
+                        : 'bg-surface-700 text-slate-500 hover:text-slate-300'
+                    }`}>
+                    {solveFor === 'eta' ? 'CALC' : 'SET'}
+                  </button>
+                </div>
+                {solveFor === 'eta' ? (
+                  <p className="text-primary-400 text-[10px] italic">Will be computed</p>
+                ) : (
+                  <div>
+                    <input type="number" value={removalTarget} onChange={e => setRemovalTarget(e.target.value)}
+                      className="input-field w-full py-1 text-xs" min="10" max="99.9" step="5" />
+                    <span className="text-slate-600 text-[9px]">%</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Packed Height (Z) */}
+              <div className={`rounded-lg border p-2 transition-all ${
+                solveFor === 'Z' ? 'border-primary-500/50 bg-primary-600/5' : 'border-surface-600 bg-surface-800/50'
+              }`}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1">
+                    <Ruler size={10} className="text-slate-500" />
+                    <span className="text-[10px] text-slate-400 font-medium">Z (height)</span>
+                  </div>
+                  <button onClick={() => setSolveFor(solveFor === 'Z' ? 'eta' : 'Z')}
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-medium transition-colors ${
+                      solveFor === 'Z'
+                        ? 'bg-primary-600/20 text-primary-400'
+                        : 'bg-surface-700 text-slate-500 hover:text-slate-300'
+                    }`}>
+                    {solveFor === 'Z' ? 'CALC' : 'SET'}
+                  </button>
+                </div>
+                {solveFor === 'Z' ? (
+                  <p className="text-primary-400 text-[10px] italic">Will be computed</p>
+                ) : (
+                  <div>
+                    <input type="number" value={packedHeight} onChange={e => setPackedHeight(e.target.value)}
+                      className="input-field w-full py-1 text-xs" step="0.5" min="0.1" />
+                    <span className="text-slate-600 text-[9px]">m</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -377,12 +531,30 @@ export function PackedColumnPage() {
             <div className="space-y-3">
               {/* Headline cards */}
               <div className="grid grid-cols-5 gap-2">
-                <ResultCard label="Diameter" value={result.D_column_m >= 1 ? result.D_column_m.toFixed(2) : result.D_column_mm.toFixed(0)} unit={result.D_column_m >= 1 ? 'm' : 'mm'} highlight />
-                <ResultCard label="Packed Height" value={result.Z_design_m.toFixed(2)} unit="m" highlight />
-                <ResultCard label="Height (HETP)" value={result.Z_hetp_m.toFixed(2)} unit="m" />
+                <ResultCard label="Diameter" value={result.D_column_m >= 1 ? result.D_column_m.toFixed(2) : result.D_column_mm.toFixed(0)} unit={result.D_column_m >= 1 ? 'm' : 'mm'} />
+                <ResultCard label="Packed Height" value={result.Z_design_m.toFixed(2)} unit="m" highlight={result.solve_mode === 'Z'} />
+                <ResultCard
+                  label="Removal"
+                  value={(result.solve_mode === 'eta' && result.computed_removal_pct != null
+                    ? result.computed_removal_pct
+                    : result.removal_target_pct
+                  ).toFixed(1)}
+                  unit="%" highlight={result.solve_mode === 'eta'} />
+                <ResultCard
+                  label="L (solvent)"
+                  value={(result.solve_mode === 'L' && result.computed_L_kgs != null
+                    ? result.computed_L_kgs
+                    : result.L_mol_per_s * (result.mixture_MW / 1000)
+                  ).toFixed(2)}
+                  unit={result.solve_mode === 'L' ? 'kg/s' : 'mol/s'}
+                  highlight={result.solve_mode === 'L'} />
                 <ResultCard label="Total ΔP" value={result.dP_total_mbar.toFixed(1)} unit="mbar" />
-                <ResultCard label="Absorbed" value={result.total_absorbed_mol_s.toFixed(3)} unit="mol/s" />
               </div>
+              {result.solve_mode === 'L' && result.bisection_converged === false && (
+                <div className="text-amber-400 text-[10px] bg-amber-500/10 px-2 py-1 rounded">
+                  Bisection did not fully converge ({result.bisection_iterations} iterations)
+                </div>
+              )}
 
               {/* Exit gas composition table */}
               <div className="panel p-4">

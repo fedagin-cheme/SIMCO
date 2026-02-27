@@ -42,7 +42,10 @@ export default function App() {
 
   return (
     <div className="flex flex-col h-screen bg-surface-900">
-      <TitleBar engineOnline={engineOnline} />
+      <TitleBar engineOnline={engineOnline} onRestartEngine={() => {
+        setEngineOnline(false)
+        window.simco?.engine.restart()
+      }} />
       <div className="flex flex-1 min-h-0">
         <Sidebar activePage={activePage} onNavigate={setActivePage} />
         <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
@@ -59,6 +62,7 @@ declare global {
       engine: {
         getStatus: () => Promise<{ ready: boolean; url: string }>
         getUrl: () => Promise<string>
+        restart: () => Promise<{ ok: boolean }>
         onReady: (callback: () => void) => void
         onOffline: (callback: () => void) => void
       }

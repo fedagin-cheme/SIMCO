@@ -1,10 +1,11 @@
-import { Minus, Square, X, Wifi, WifiOff } from 'lucide-react'
+import { Minus, Square, X, Wifi, WifiOff, RotateCw } from 'lucide-react'
 
 interface TitleBarProps {
   engineOnline: boolean
+  onRestartEngine: () => void
 }
 
-export function TitleBar({ engineOnline }: TitleBarProps) {
+export function TitleBar({ engineOnline, onRestartEngine }: TitleBarProps) {
   const isMac = navigator.platform.startsWith('Mac')
 
   const handleMinimize = () => window.simco?.window.minimize()
@@ -38,6 +39,13 @@ export function TitleBar({ engineOnline }: TitleBarProps) {
             : <><WifiOff size={11} /> Engine offline</>
           }
         </div>
+        <button
+          onClick={onRestartEngine}
+          title="Restart engine"
+          className="p-1.5 rounded text-slate-400 hover:bg-surface-600 hover:text-slate-100 transition-colors"
+        >
+          <RotateCw size={12} />
+        </button>
 
         {/* Windows-style window controls (hidden on Mac) */}
         {!isMac && (
