@@ -110,7 +110,6 @@ function PropRow({ label, value }: { label: string; value: string }) {
 export function PackedColumnPage() {
   // ── Compound registry
   const [allGases, setAllGases] = useState<CompactCompound[]>([])
-  const [allSolvents, setAllSolvents] = useState<CompactCompound[]>([])
   const engine = useEngine<{ categories: Record<string, { label: string; compounds: any[] }> }>()
 
   useEffect(() => {
@@ -118,41 +117,51 @@ export function PackedColumnPage() {
       const data = await engine.call('/api/compounds')
       if (!data) return
       const gas: CompactCompound[] = []
-      const solv: CompactCompound[] = []
       for (const [catKey, group] of Object.entries(data.categories)) {
         for (const c of group.compounds) {
           const comp: CompactCompound = { key: c.key, name: c.name, formula: c.formula, mw: c.mw, category: catKey }
           if (catKey === 'acid_gas' || catKey === 'carrier_gas') gas.push(comp)
-          else if (catKey === 'amine_solvent' || catKey === 'physical_solvent') solv.push(comp)
         }
       }
-      setAllGases(gas); setAllSolvents(solv)
+      setAllGases(gas)
     }
     load()
   }, [])
 
-  // ── Gas mixture
-  const [mixture, setMixture] = useState<MixtureRow[]>([])
-  const totalMol = mixture.reduce((s, r) => s + (parseFloat(r.molPercent) || 0), 0)
-  const molValid = Math.abs(totalMol - 100) < 0.5
-  const availableGases = allGases.filter(g => !mixture.some(r => r.compound.key === g.key))
+  // ── Gas mixture (simplified: CO2 + Air)
+  const [co2Pct, setCo2Pct] = useState('15')
+  const co2Val = parseFloat(co2Pct) || 0
+  const airPct = 100 - co2Val
+  const n2Pct = airPct * 79 / 100
+  const o2Pct = airPct * 21 / 100
+  const molValid = co2Val > 0 && co2Val < 100
 
-  // List of acid gases in the current mixture (for target gas selection)
-  const acidGasesInMixture = mixture.filter(r => r.compound.category === 'acid_gas')
-  const [targetGas, setTargetGas] = useState('')
+  // Build mixture array for API call
+  const mixture = useMemo(() => {
+    const co2Comp = allGases.find(g => g.name === 'Carbon dioxide')
+    const n2Comp = allGases.find(g => g.name === 'Nitrogen')
+    const o2Comp = allGases.find(g => g.name === 'Oxygen')
+    if (!co2Comp || !n2Comp || !o2Comp) return [] as MixtureRow[]
+    return [
+      { compound: co2Comp, molPercent: co2Val.toString() },
+      { compound: n2Comp, molPercent: n2Pct.toFixed(2) },
+      { compound: o2Comp, molPercent: o2Pct.toFixed(2) },
+    ]
+  }, [allGases, co2Val, n2Pct, o2Pct])
+
+  const targetGas = 'Carbon dioxide'
 
   // ── Operating conditions
   const [gasTotalFlow, setGasTotalFlow] = useState('1.0')
   const [gasTemp, setGasTemp] = useState('40')
   const [gasPressure, setGasPressure] = useState('1.01325')
 
-  // ── Solvent
-  const [selectedSolvent, setSelectedSolvent] = useState('')
+  // ── Solvent (fixed: MEA)
+  const selectedSolvent = 'Monoethanolamine'
   const [solventFlow, setSolventFlow] = useState('20.0')
   const [solventMuL, setSolventMuL] = useState('1.5')
   const [solventSigma, setSolventSigma] = useState('0.072')
   const [solventWtPct, setSolventWtPct] = useState('30')
-  const isAmineSolvent = selectedSolvent === 'Monoethanolamine' || selectedSolvent === 'Methyldiethanolamine'
 
   // ── Packing
   const [packings, setPackings] = useState<Packing[]>([])
@@ -198,30 +207,12 @@ export function PackedColumnPage() {
     return mixtureMW > 0 ? (P * 1e5 * mixtureMW / 1000) / (8.314 * (T + 273.15)) : 1.2
   }, [mixtureMW, gasTemp, gasPressure])
 
-  const rhoL = SOLVENT_DENSITY[selectedSolvent] ?? 998
-  const solventObj = allSolvents.find(s => s.name === selectedSolvent)
+  const rhoL = SOLVENT_DENSITY[selectedSolvent] ?? 1012
   const filteredPackings = filterType === 'all' ? packings : packings.filter(p => p.type === filterType)
-
-  // Mixture helpers
-  function addGas(key: string) {
-    const comp = allGases.find(g => g.key === key)
-    if (!comp || mixture.some(r => r.compound.key === key)) return
-    setMixture(prev => [...prev, { compound: comp, molPercent: '' }])
-  }
-
-  function addAirPreset() {
-    const n2 = allGases.find(g => g.name === 'Nitrogen')
-    const o2 = allGases.find(g => g.name === 'Oxygen')
-    if (!n2 || !o2) return
-    setMixture(prev => {
-      const without = prev.filter(r => r.compound.name !== 'Nitrogen' && r.compound.name !== 'Oxygen')
-      return [...without, { compound: n2, molPercent: '79' }, { compound: o2, molPercent: '21' }]
-    })
-  }
 
   // Run calculation
   async function runDesign() {
-    if (!selectedPacking || !selectedSolvent || mixture.length === 0 || !molValid) return
+    if (!selectedPacking || mixture.length === 0 || !molValid) return
     setLoading(true); setError(null); setResult(null)
     try {
       const body: Record<string, any> = {
@@ -241,10 +232,10 @@ export function PackedColumnPage() {
       if (solveFor !== 'L') body.L_mass_kgs = parseFloat(solventFlow)
       if (solveFor !== 'eta') body.removal_target_pct = parseFloat(removalTarget)
       if (solveFor !== 'Z') body.Z_packed_m = parseFloat(packedHeight)
-      // Target gas for removal reference
-      if (targetGas) body.target_component = targetGas
+      // Target gas for removal reference (always CO2)
+      body.target_component = targetGas
       // Solvent concentration
-      if (isAmineSolvent) body.solvent_wt_pct = parseFloat(solventWtPct) || 30
+      body.solvent_wt_pct = parseFloat(solventWtPct) || 30
 
       const res = await fetch(`${ENGINE_URL}/api/column/scrubber-design`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -282,84 +273,46 @@ export function PackedColumnPage() {
         {/* ═══ LEFT PANEL: System Definition ═══ */}
         <div className="w-[420px] flex-shrink-0 flex flex-col gap-3 min-h-0 overflow-y-auto">
 
-          {/* Gas Mixture */}
+          {/* Gas Mixture: CO2 + Air */}
           <div className="panel p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="label text-xs flex items-center gap-1.5"><Wind size={12} className="text-slate-500" /> Gas Mixture</p>
-              <button onClick={addAirPreset}
-                className="px-2 py-0.5 rounded text-[10px] font-medium bg-surface-700 text-slate-400 hover:text-slate-200 transition-colors"
-                title="Add N₂ (79%) + O₂ (21%)">
-                + Air
-              </button>
+            <p className="label text-xs flex items-center gap-1.5"><Wind size={12} className="text-slate-500" /> Gas Mixture</p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-400 w-28">CO₂</span>
+              <input type="number" value={co2Pct} onChange={e => setCo2Pct(e.target.value)}
+                className="input-field py-1 text-xs w-20 text-center" min="0.1" max="99" step="0.5" />
+              <span className="text-slate-600 text-[10px]">mol%</span>
             </div>
-            {mixture.map(r => (
-              <div key={r.compound.key} className="flex items-center gap-1.5">
-                <span className={`text-xs w-36 truncate ${r.compound.category === 'acid_gas' ? 'text-red-400' : 'text-slate-300'}`}>
-                  {r.compound.name} <span className="text-slate-600">({r.compound.mw})</span>
-                </span>
-                <input type="number" value={r.molPercent}
-                  onChange={e => setMixture(prev => prev.map(x => x.compound.key === r.compound.key ? { ...x, molPercent: e.target.value } : x))}
-                  placeholder="%" className="input-field py-1 text-xs w-16 text-center" min="0" max="100" step="0.1" />
-                <span className="text-slate-600 text-[10px]">mol%</span>
-                <button onClick={() => { setMixture(prev => prev.filter(x => x.compound.key !== r.compound.key)) }}
-                  className="text-slate-600 hover:text-red-400 transition-colors"><X size={11} /></button>
+            <div className="border-t border-surface-700/50 pt-2">
+              <p className="text-[10px] text-slate-500 mb-1">Air balance (79:21 N₂/O₂)</p>
+              <div className="flex items-center gap-3 text-xs text-slate-300">
+                <span>N₂ <span className="font-mono text-slate-100">{n2Pct.toFixed(2)}%</span></span>
+                <span>O₂ <span className="font-mono text-slate-100">{o2Pct.toFixed(2)}%</span></span>
+                <span className="text-slate-600 ml-auto">Air: {airPct.toFixed(2)}%</span>
               </div>
-            ))}
-            {mixture.length > 0 && (
-              <p className={`text-[10px] ${molValid ? 'text-emerald-500' : 'text-amber-400'}`}>
-                Total: {totalMol.toFixed(1)}%{!molValid && ' — must be 100%'}
-              </p>
-            )}
-            <select value="" onChange={e => addGas(e.target.value)} className="input-field py-1 text-xs w-full">
-              <option value="">+ Add component…</option>
-              {availableGases.map(g => (
-                <option key={g.key} value={g.key}>{g.name} ({g.formula}, {g.mw}) — {g.category === 'acid_gas' ? 'acid gas' : 'carrier'}</option>
-              ))}
-            </select>
-            {acidGasesInMixture.length > 0 && (
-              <div>
-                <label className="text-slate-500 text-[10px] block mb-0.5">Target gas for removal</label>
-                <select value={targetGas} onChange={e => setTargetGas(e.target.value)}
-                  className="input-field py-1 text-xs w-full">
-                  <option value="">All acid gases (max Z)</option>
-                  {acidGasesInMixture.map(r => (
-                    <option key={r.compound.key} value={r.compound.name}>{r.compound.name}</option>
-                  ))}
-                </select>
-              </div>
+            </div>
+            {!molValid && (
+              <p className="text-[10px] text-amber-400">CO₂ must be between 0 and 100%</p>
             )}
             {mixtureMW > 0 && (
               <p className="text-[10px] text-slate-600">MW<sub>mix</sub>={mixtureMW.toFixed(2)} · ρ<sub>G</sub>≈{rhoG.toFixed(3)} kg/m³</p>
             )}
           </div>
 
-          {/* Solvent */}
+          {/* Solvent: MEA */}
           <div className="panel p-3 space-y-2">
-            <p className="label text-xs flex items-center gap-1.5"><Droplets size={12} className="text-slate-500" /> Solvent</p>
-            <select value={selectedSolvent} onChange={e => setSelectedSolvent(e.target.value)} className="input-field py-1.5 text-xs w-full">
-              <option value="">Select solvent…</option>
-              {allSolvents.map(s => (
-                <option key={s.key} value={s.name}>{s.name} ({s.formula}, MW={s.mw})</option>
-              ))}
-            </select>
-            {selectedSolvent && (
-              <div className="space-y-2">
-                {isAmineSolvent && (
-                  <Field label="Amine concentration" hint="wt% in water">
-                    <input type="number" value={solventWtPct} onChange={e => setSolventWtPct(e.target.value)}
-                      className="input-field w-full py-1 text-xs" min="5" max="100" step="5" />
-                  </Field>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="μ_L" hint="mPa·s">
-                    <input type="number" value={solventMuL} onChange={e => setSolventMuL(e.target.value)} className="input-field w-full py-1 text-xs" step="0.1" />
-                  </Field>
-                  <Field label="σ" hint="N/m">
-                    <input type="number" value={solventSigma} onChange={e => setSolventSigma(e.target.value)} className="input-field w-full py-1 text-xs" step="0.001" />
-                  </Field>
-                </div>
-              </div>
-            )}
+            <p className="label text-xs flex items-center gap-1.5"><Droplets size={12} className="text-slate-500" /> Solvent — MEA (Monoethanolamine)</p>
+            <div className="grid grid-cols-3 gap-2">
+              <Field label="Concentration" hint="wt%">
+                <input type="number" value={solventWtPct} onChange={e => setSolventWtPct(e.target.value)}
+                  className="input-field w-full py-1 text-xs" min="5" max="100" step="5" />
+              </Field>
+              <Field label="μ_L" hint="mPa·s">
+                <input type="number" value={solventMuL} onChange={e => setSolventMuL(e.target.value)} className="input-field w-full py-1 text-xs" step="0.1" />
+              </Field>
+              <Field label="σ" hint="N/m">
+                <input type="number" value={solventSigma} onChange={e => setSolventSigma(e.target.value)} className="input-field w-full py-1 text-xs" step="0.001" />
+              </Field>
+            </div>
           </div>
 
           {/* Packing selector */}
@@ -512,7 +465,7 @@ export function PackedColumnPage() {
           {/* Calculate */}
           <button className="btn-primary w-full flex items-center justify-center gap-2 py-2"
             onClick={runDesign}
-            disabled={loading || !selectedPacking || !selectedSolvent || mixture.length === 0 || !molValid}>
+            disabled={loading || !selectedPacking || mixture.length === 0 || !molValid}>
             {loading ? <><Loader2 size={14} className="animate-spin" /> Calculating…</> : <><Play size={14} /> Design Scrubber</>}
           </button>
 
